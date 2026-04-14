@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ackermann_ego_gazebo</name>
+  <version>0.0.1</version>
+  <description>EGO-Planner + Gazebo tricycle (Ackermann-like) + 2D laser, parallel to px4_ego_lidar</description>
+  <maintainer email="jpb@todo.todo">jpb</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>ego_planner</exec_depend>
+  <exec_depend>gazebo_msgs</exec_depend>
+  <exec_depend>gazebo_plugins</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>laser_geometry</exec_depend>
+  <exec_depend>move_base</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>costmap_2d</exec_depend>
+  <exec_depend>global_planner</exec_depend>
+  <exec_depend>quadrotor_msgs</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>rviz</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>teb_local_planner</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>xacro</exec_depend>
+</package>

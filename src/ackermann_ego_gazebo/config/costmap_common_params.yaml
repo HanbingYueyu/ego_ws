@@ -1,0 +1,19 @@
+obstacle_range: 20.0
+raytrace_range: 25.0
+transform_tolerance: 0.5
+
+footprint: [[0.85, 0.35], [0.85, -0.35], [-0.35, -0.35], [-0.35, 0.35]]
+footprint_padding: 0.05
+
+observation_sources: laser_scan_sensor
+laser_scan_sensor:
+  data_type: LaserScan
+  topic: /scan
+  sensor_frame: hokuyo_link
+  marking: true
+  clearing: true
+  inf_is_valid: true
+
+inflation_layer:
+  inflation_radius: 0.7
+  cost_scaling_factor: 4.0

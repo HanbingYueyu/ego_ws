@@ -1,0 +1,62 @@
+<launch>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="steer_sign" default="-1.0"/>
+  <param name="use_sim_time" value="$(arg use_sim_time)"/>
+
+  <!-- Keep Gazebo clean to avoid PX4 plugin conflicts on car-only sim -->
+  <env name="GAZEBO_PLUGIN_PATH" value=""/>
+  <env name="GAZEBO_MODEL_PATH" value=""/>
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="gui" value="true"/>
+    <arg name="recording" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+  <param name="robot_description" command="$(find xacro)/xacro $(find ackermann_ego_gazebo)/urdf/tricycle_with_laser.xacro"/>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen">
+    <param name="publish_frequency" type="double" value="30.0"/>
+  </node>
+
+  <node name="spawn_tricycle" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args="-urdf -model tricycle -param robot_description -x 0 -y 0 -z 0.15 -Y 0"/>
+
+  <node pkg="tf2_ros" type="static_transform_publisher" name="world_odom" args="0 0 0 0 0 0 world odom"/>
+
+  <node pkg="ackermann_ego_gazebo" type="random_obstacles.py" name="random_obstacles" output="screen"/>
+
+  <node pkg="ackermann_ego_gazebo" type="odom_car_marker.py" name="odom_car_marker" output="screen">
+    <remap from="/odom" to="/tricycle/odom"/>
+  </node>
+
+  <node pkg="ackermann_ego_gazebo" type="laserscan_cloud_world.py" name="laserscan_cloud_world" output="screen">
+    <param name="cloud_out" value="/scan_cloud_world"/>
+  </node>
+
+  <node pkg="ackermann_ego_gazebo" type="cmdvel_to_tricycle.py" name="cmdvel_to_tricycle" output="screen">
+    <param name="wheelbase" value="1.14"/>
+    <param name="steer_max" value="0.7"/>
+    <param name="steer_rate_max" value="0.8"/>
+    <param name="v_deadzone" value="0.05"/>
+    <param name="steer_sign" value="$(arg steer_sign)"/>
+    <param name="alpha" value="0.35"/>
+    <param name="input_is_steer" value="false"/>
+  </node>
+
+  <!-- Standard third-party navigation stack: move_base + TEB -->
+  <node pkg="move_base" type="move_base" name="move_base" output="screen" clear_params="true">
+    <rosparam command="load" file="$(find ackermann_ego_gazebo)/config/move_base_params.yaml"/>
+    <rosparam command="load" file="$(find ackermann_ego_gazebo)/config/costmap_common_params.yaml"/>
+    <rosparam command="load" file="$(find ackermann_ego_gazebo)/config/global_costmap_params.yaml"/>
+    <rosparam command="load" file="$(find ackermann_ego_gazebo)/config/local_costmap_params.yaml"/>
+    <rosparam command="load" file="$(find ackermann_ego_gazebo)/config/teb_local_planner_params.yaml"/>
+
+    <remap from="cmd_vel" to="/cmd_vel_nav"/>
+    <remap from="odom" to="/tricycle/odom"/>
+  </node>
+
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find ackermann_ego_gazebo)/rviz/ackermann_car.rviz" output="screen"/>
+</launch>

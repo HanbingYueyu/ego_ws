@@ -1,0 +1,32 @@
+<launch>
+    <include file="$(find px4)/launch/mavros_posix_sitl.launch">
+        <arg name="vehicle" value="iris"/>
+        <arg name="sdf" value="$(env HOME)/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris_velodyne/iris_velodyne.sdf"/>
+    </include>
+
+    <node pkg="px4_ego_lidar" type="random_obstacles.py" name="random_obstacles" output="screen" />
+
+    <node pkg="px4_ego_lidar" type="odom_to_tf.py" name="odom_to_tf" output="screen" />
+    
+    <!-- Match iris_velodyne.sdf: velodyne_link at z=0.2 above base_link -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="lidar_tf_broadcaster"
+          args="0 0 0.2 0 0 0 base_link velodyne_link" />
+
+    <!-- EGO grid_map expects cloud points in the same frame as mavros odom (world from odom_to_tf) -->
+    <node pkg="px4_ego_lidar" type="velodyne_to_world.py" name="velodyne_to_world" output="screen">
+        <param name="target_frame" value="world"/>
+        <param name="cloud_in" value="/velodyne_points"/>
+        <param name="cloud_out" value="/velodyne_points_world"/>
+    </node>
+
+    <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen" />
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch">
+        <arg name="grid_map_cloud" value="/velodyne_points_world"/>
+    </include>
+
+    <node pkg="rviz" type="rviz" name="rviz_global" args="-d $(find px4_ego_lidar)/rviz/global.rviz" output="screen"/>
+
+    <node pkg="rviz" type="rviz" name="rviz_local" args="-d $(find px4_ego_lidar)/rviz/local.rviz" output="screen"/>
+
+</launch>

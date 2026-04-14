@@ -1,0 +1,18 @@
+<launch>
+    <include file="$(find px4)/launch/mavros_posix_sitl.launch">
+        <arg name="vehicle" value="iris_depth_camera"/>
+    </include>
+
+    <node pkg="px4_ego_sim" type="odom_to_tf.py" name="odom_to_tf" output="screen" />
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_tf_broadcaster"
+          args="0.1 0 0 -1.5708 0 -1.5708 base_link camera_link" />
+
+    <node pkg="px4_ego_sim" type="random_obstacles.py" name="random_obstacles" output="screen" />
+
+    <node pkg="px4_ego_sim" type="px4_controller.py" name="px4_controller" output="screen" />
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch" />
+
+    <include file="$(find ego_planner)/launch/rviz.launch" />
+</launch>

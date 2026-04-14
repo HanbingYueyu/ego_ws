@@ -1,0 +1,92 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Value: true
+
+    - Class: rviz/MarkerArray
+      Name: Football_Field
+      Topic: /rviz_world_markers
+      Value: true
+
+    - Class: rviz/Marker
+      Name: Car_Avatar
+      Topic: /rviz_car_marker
+      Value: true
+
+    - Class: rviz/Axes
+      Name: Base_Link
+      Reference Frame: base_link
+      Value: true
+
+    - Class: rviz/LaserScan
+      Name: Laser_2D
+      Topic: /scan
+      Value: true
+
+    - Class: rviz/PointCloud2
+      Name: Scan_Cloud_World
+      Topic: /scan_cloud_world
+      Style: Points
+      Size (m): 0.05
+      Value: true
+
+    - Class: rviz/Path
+      Name: Global_Plan
+      Topic: /move_base/GlobalPlanner/plan
+      Color: 255; 255; 0
+      Line Style: Lines
+      Line Width: 0.08
+      Value: true
+
+    - Class: rviz/Path
+      Name: Local_Plan
+      Topic: /move_base/TebLocalPlannerROS/local_plan
+      Color: 0; 255; 0
+      Line Style: Lines
+      Line Width: 0.12
+      Value: true
+
+    - Class: rviz/Map
+      Name: Global_Costmap
+      Topic: /move_base/global_costmap/costmap
+      Alpha: 0.35
+      Value: true
+
+    - Class: rviz/Map
+      Name: Local_Costmap
+      Topic: /move_base/local_costmap/costmap
+      Alpha: 0.55
+      Value: true
+
+    - Class: rviz/MarkerArray
+      Name: TEB_Markers
+      Topic: /move_base/TebLocalPlannerROS/teb_markers
+      Value: true
+
+    - Class: rviz/Marker
+      Name: TEB_Obstacles
+      Topic: /move_base/TebLocalPlannerROS/obstacles
+      Value: true
+
+    - Class: rviz/Marker
+      Name: TEB_ViaPoints
+      Topic: /move_base/TebLocalPlannerROS/via_points
+      Value: true
+
+  Global Options:
+    Fixed Frame: odom
+
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Target Frame: base_link

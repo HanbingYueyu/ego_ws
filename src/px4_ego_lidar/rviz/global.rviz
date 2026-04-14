@@ -1,0 +1,42 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Displays:
+    - Class: rviz/Grid
+      Value: true
+    - Class: rviz/MarkerArray
+      Name: Football_Field
+      Topic: /rviz_world_markers
+      Value: true
+    - Class: rviz/Marker
+      Name: Drone_Avatar
+      Topic: /rviz_drone_marker
+      Value: true
+    - Class: rviz/Marker
+      Name: EGO_Global_Path
+      Topic: /ego_planner_node/global_list
+      Value: true
+    - Class: rviz/Marker
+      Name: EGO_Init_Path
+      Topic: /ego_planner_node/init_list
+      Value: true
+    - Class: rviz/Marker
+      Name: EGO_Optimal_Traj
+      Topic: /ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/Marker
+      Name: EGO_AStar_Path
+      Topic: /ego_planner_node/a_star_list
+      Value: false
+  Global Options:
+    Fixed Frame: world
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+  Views:
+    Current:
+      Class: rviz/ThirdPersonFollower
+      Target Frame: <Fixed Frame>
