@@ -1,7 +1,12 @@
 <launch>
     <include file="$(find px4)/launch/mavros_posix_sitl.launch">
         <arg name="vehicle" value="iris_depth_camera"/>
+        <arg name="fcu_url" value="udp://:14540@localhost:14580"/>
     </include>
+
+    <arg name="map_size_x" default="120.0"/>
+    <arg name="map_size_y" default="80.0"/>
+    <arg name="map_size_z" default="6.0"/>
 
     <node pkg="px4_ego_sim" type="odom_to_tf.py" name="odom_to_tf" output="screen" />
 
@@ -10,9 +15,26 @@
 
     <node pkg="px4_ego_sim" type="random_obstacles.py" name="random_obstacles" output="screen" />
 
+    <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+        <remap from="global_map" to="/map_generator/global_cloud" />
+        <remap from="odometry" to="/mavros/local_position/odom" />
+
+        <param name="map/x_size" value="$(arg map_size_x)" />
+        <param name="map/y_size" value="$(arg map_size_y)" />
+        <param name="map/z_size" value="$(arg map_size_z)" />
+        <param name="map/resolution" value="0.1" />
+        <param name="sensing_horizon" value="8.0" />
+        <param name="sensing_rate" value="30.0" />
+        <param name="estimation_rate" value="30.0" />
+    </node>
+
     <node pkg="px4_ego_sim" type="px4_controller.py" name="px4_controller" output="screen" />
 
-    <include file="$(find ego_planner)/launch/run_in_sim.launch" />
+    <param name="/ego_planner_node/grid_map/pose_type" value="2" />
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch">
+        <arg name="grid_map_cloud" value="/pcl_render_node/cloud"/>
+    </include>
 
     <include file="$(find ego_planner)/launch/rviz.launch" />
 </launch>
