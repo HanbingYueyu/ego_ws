@@ -4,3 +4,4 @@
 build/
 devel/
 src/CMakeLists.txt
+src/ego-planner.zip
