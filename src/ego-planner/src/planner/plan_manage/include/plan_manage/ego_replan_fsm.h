@@ -59,6 +59,8 @@ namespace ego_planner
     bool replan_sync_with_odom_;
     double replan_odom_err_thresh_;
     double goal_reach_odom_thresh_;
+    bool reanchor_global_traj_on_detour_;
+    double global_reanchor_dist_thresh_;
 
     /* planning data */
     bool trigger_, have_target_, have_odom_, have_new_target_;

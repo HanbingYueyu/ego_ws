@@ -199,6 +199,30 @@
   </gazebo>
 
   <gazebo>
+    <plugin name="rear_left_wheel_state_publisher" filename="libgazebo_ros_joint_state_publisher.so">
+      <robotNamespace>/</robotNamespace>
+      <jointName>rear_left_wheel_joint</jointName>
+      <updateRate>40.0</updateRate>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <plugin name="rear_right_wheel_state_publisher" filename="libgazebo_ros_joint_state_publisher.so">
+      <robotNamespace>/</robotNamespace>
+      <jointName>rear_right_wheel_joint</jointName>
+      <updateRate>40.0</updateRate>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <plugin name="drive_wheel_state_publisher" filename="libgazebo_ros_joint_state_publisher.so">
+      <robotNamespace>/</robotNamespace>
+      <jointName>drive_wheel_joint</jointName>
+      <updateRate>40.0</updateRate>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
     <plugin name="ackermann_4w_drive" filename="libgazebo_ros_planar_move.so">
       <robotNamespace>/</robotNamespace>
       <commandTopic>cmd_vel</commandTopic>

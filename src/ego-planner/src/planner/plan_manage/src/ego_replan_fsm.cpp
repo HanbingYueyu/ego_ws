@@ -23,6 +23,8 @@ namespace ego_planner
     nh.param("fsm/replan_sync_with_odom", replan_sync_with_odom_, false);
     nh.param("fsm/replan_odom_err_thresh", replan_odom_err_thresh_, 0.8);
     nh.param("fsm/goal_reach_odom_thresh", goal_reach_odom_thresh_, 0.5);
+    nh.param("fsm/reanchor_global_traj_on_detour", reanchor_global_traj_on_detour_, true);
+    nh.param("fsm/global_reanchor_dist_thresh", global_reanchor_dist_thresh_, 1.2);
 
     nh.param("fsm/waypoint_num", waypoint_num_, -1);
     for (int i = 0; i < waypoint_num_; i++)
@@ -539,6 +541,34 @@ namespace ego_planner
     double t;
 
     double t_step = planning_horizen_ / 20 / planner_manager_->pp_.max_vel_;
+    t_step = std::max(0.02, t_step);
+
+    if (reanchor_global_traj_on_detour_)
+    {
+      double dist_to_global_min = 1e9;
+      for (double tt = planner_manager_->global_data_.last_progress_time_; tt < planner_manager_->global_data_.global_duration_; tt += t_step)
+      {
+        const Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(tt);
+        dist_to_global_min = std::min(dist_to_global_min, (pos_t - start_pt_).norm());
+      }
+
+      if (dist_to_global_min > global_reanchor_dist_thresh_)
+      {
+        const bool reanchor_success = planner_manager_->planGlobalTraj(
+            start_pt_, start_vel_, Eigen::Vector3d::Zero(),
+            end_pt_, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
+
+        if (reanchor_success)
+        {
+          ROS_WARN_THROTTLE(0.5, "[FSM] Re-anchor global traj: detour=%.3f m > %.3f m", dist_to_global_min, global_reanchor_dist_thresh_);
+        }
+        else
+        {
+          ROS_WARN_THROTTLE(0.5, "[FSM] Global re-anchor failed, keep current global traj.");
+        }
+      }
+    }
+
     double dist_min = 9999, dist_min_t = 0.0;
     for (t = planner_manager_->global_data_.last_progress_time_; t < planner_manager_->global_data_.global_duration_; t += t_step)
     {

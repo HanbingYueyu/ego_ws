@@ -23,7 +23,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/MarkerArray
       Name: WorldMarkers
-      Topic: /rviz_world_markers
+      Marker Topic: /rviz_world_markers
       Value: true
     - Class: rviz/Marker
       Name: GoalPoint

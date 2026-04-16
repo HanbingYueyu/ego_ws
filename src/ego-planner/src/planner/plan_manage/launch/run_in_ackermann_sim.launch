@@ -86,6 +86,8 @@
   <param name="/ego_planner_node/fsm/replan_sync_with_odom" value="true"/>
   <param name="/ego_planner_node/fsm/replan_odom_err_thresh" value="0.55"/>
   <param name="/ego_planner_node/fsm/goal_reach_odom_thresh" value="0.45"/>
+  <param name="/ego_planner_node/fsm/reanchor_global_traj_on_detour" value="true"/>
+  <param name="/ego_planner_node/fsm/global_reanchor_dist_thresh" value="1.10"/>
   <param name="/ego_planner_node/manager/lock_ground_z" value="true"/>
 
   <node pkg="ego_planner" name="traj_server" type="traj_server" output="screen">
