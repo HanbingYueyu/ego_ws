@@ -1,0 +1,132 @@
+<launch>
+  <arg name="world_name" default="$(find ros_gazebo_obstacle_car)/world/football_field.world"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="seed" default="42"/>
+  <arg name="obstacle_count" default="22"/>
+  <arg name="spawn_z" default="0.15"/>
+  <arg name="flight_type" default="1"/>
+  <arg name="point_num" default="5"/>
+  <arg name="point0_x" default="12.0"/>
+  <arg name="point0_y" default="0.0"/>
+  <arg name="point0_z" default="0.0"/>
+  <arg name="point1_x" default="0.0"/>
+  <arg name="point1_y" default="12.0"/>
+  <arg name="point1_z" default="0.0"/>
+  <arg name="point2_x" default="-12.0"/>
+  <arg name="point2_y" default="0.0"/>
+  <arg name="point2_z" default="0.0"/>
+  <arg name="point3_x" default="0.0"/>
+  <arg name="point3_y" default="-12.0"/>
+  <arg name="point3_z" default="0.0"/>
+  <arg name="point4_x" default="12.0"/>
+  <arg name="point4_y" default="0.0"/>
+  <arg name="point4_z" default="0.0"/>
+
+  <param name="use_sim_time" value="$(arg use_sim_time)"/>
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(arg world_name)"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+  <param name="robot_description" command="$(find xacro)/xacro $(find ros_gazebo_obstacle_car)/urdf/tricycle_with_laser.xacro"/>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+  <node name="world_to_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 world odom"/>
+
+    <node name="spawn_ackermann_4w" pkg="gazebo_ros" type="spawn_model" output="screen"
+      args="-urdf -model ackermann_4w -param robot_description -x 0 -y 0 -z $(arg spawn_z) -Y 0"/>
+
+  <node name="football_random_obstacles" pkg="ros_gazebo_obstacle_car" type="random_obstacles.py" output="screen">
+    <param name="seed" value="$(arg seed)"/>
+    <param name="obstacle_count" value="$(arg obstacle_count)"/>
+    <param name="field_length" value="105.0"/>
+    <param name="field_width" value="68.0"/>
+    <param name="clear_radius" value="6.0"/>
+  </node>
+
+  <node name="scan_cloud_world" pkg="ros_gazebo_obstacle_car" type="laserscan_cloud_world.py" output="screen">
+    <param name="scan_in" value="/scan"/>
+    <param name="cloud_out" value="/scan_cloud_world"/>
+    <param name="target_frame" value="world"/>
+    <param name="use_inf_points" value="false"/>
+    <param name="range_max_margin" value="0.08"/>
+  </node>
+
+  <node name="ego_car_controller" pkg="ros_gazebo_obstacle_car" type="ego_car_controller.py" output="screen">
+    <param name="v_max" value="0.85"/>
+    <param name="k_pos" value="0.55"/>
+    <param name="k_w" value="1.8"/>
+    <param name="k_w_fast_turn" value="2.2"/>
+    <param name="use_pos_fallback" value="false"/>
+    <param name="steer_sign" value="1.0"/>
+    <param name="k_yaw_damp" value="0.35"/>
+    <param name="allow_reverse_align" value="false"/>
+    <param name="reverse_yaw_thresh" value="1.45"/>
+    <param name="reverse_speed" value="0.12"/>
+    <param name="v_reverse_max" value="0.25"/>
+    <param name="align_speed_cap" value="0.55"/>
+    <param name="steer_max" value="1.35"/>
+    <param name="min_drive_speed" value="0.10"/>
+    <param name="min_align_speed" value="0.06"/>
+    <param name="align_steer_max" value="0.70"/>
+    <param name="yaw_deadband" value="0.05"/>
+    <param name="goal_tolerance" value="0.35"/>
+    <param name="yaw_slow_thresh" value="0.85"/>
+    <param name="turn_in_place_thresh" value="1.10"/>
+    <param name="vel_heading_thresh" value="0.08"/>
+    <param name="lookahead_time" value="0.45"/>
+    <param name="motion_yaw_min_speed" value="0.04"/>
+    <param name="yaw_ref_rate_limit" value="1.2"/>
+    <param name="steer_rate_limit" value="2.2"/>
+    <param name="hard_brake_yaw_thresh" value="1.7"/>
+    <param name="safety_enable" value="true"/>
+    <param name="safety_stop_dist" value="1.05"/>
+    <param name="safety_slow_dist" value="2.20"/>
+    <param name="safety_turn_rate" value="0.95"/>
+    <param name="safety_scan_timeout" value="0.35"/>
+    <param name="safety_front_half_angle_deg" value="35.0"/>
+    <param name="safety_side_angle_deg" value="75.0"/>
+  </node>
+
+  <include file="$(find ego_planner)/launch/run_in_ackermann_sim.launch">
+    <arg name="odom_topic" value="/odom"/>
+    <arg name="grid_map_cloud" value="/scan_cloud_world"/>
+    <arg name="flight_type" value="$(arg flight_type)"/>
+    <arg name="point_num" value="$(arg point_num)"/>
+    <arg name="point0_x" value="$(arg point0_x)"/>
+    <arg name="point0_y" value="$(arg point0_y)"/>
+    <arg name="point0_z" value="$(arg point0_z)"/>
+    <arg name="point1_x" value="$(arg point1_x)"/>
+    <arg name="point1_y" value="$(arg point1_y)"/>
+    <arg name="point1_z" value="$(arg point1_z)"/>
+    <arg name="point2_x" value="$(arg point2_x)"/>
+    <arg name="point2_y" value="$(arg point2_y)"/>
+    <arg name="point2_z" value="$(arg point2_z)"/>
+    <arg name="point3_x" value="$(arg point3_x)"/>
+    <arg name="point3_y" value="$(arg point3_y)"/>
+    <arg name="point3_z" value="$(arg point3_z)"/>
+    <arg name="point4_x" value="$(arg point4_x)"/>
+    <arg name="point4_y" value="$(arg point4_y)"/>
+    <arg name="point4_z" value="$(arg point4_z)"/>
+  </include>
+
+  <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
+    <remap from="~odom" to="/odom"/>
+    <param name="mesh_resource" value="package://ros_gazebo_obstacle_car/meshes/ackermann_body.stl"/>
+    <param name="color/a" value="1.0"/>
+    <param name="color/r" value="0.0"/>
+    <param name="color/g" value="0.0"/>
+    <param name="color/b" value="0.0"/>
+    <param name="covariance_scale" value="100.0"/>
+    <param name="robot_scale" value="1.0"/>
+    <param name="tf45" value="true"/>
+  </node>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ros_gazebo_obstacle_car)/rviz/demo.rviz" output="screen"/>
+</launch>

@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ros_gazebo_obstacle_car</name>
+  <version>0.0.1</version>
+  <description>ROS Noetic and Gazebo obstacle avoidance car demo with RViz point cloud visualization.</description>
+  <maintainer email="hbyy@todo.todo">hbyy</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>rospy</depend>
+  <depend>roscpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>gazebo_ros</depend>
+  <depend>gazebo_msgs</depend>
+  <depend>tf</depend>
+  <depend>tf2_ros</depend>
+  <depend>std_msgs</depend>
+  <depend>laser_geometry</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>xacro</depend>
+  <depend>rviz</depend>
+  <depend>visualization_msgs</depend>
+  <depend>odom_visualization</depend>
+</package>
