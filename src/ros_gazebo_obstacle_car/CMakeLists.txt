@@ -7,6 +7,7 @@ catkin_package()
 
 catkin_install_python(PROGRAMS
   scripts/ego_car_controller.py
+  scripts/ackermann_joint_state_bridge.py
   scripts/obstacle_avoidance.py
   scripts/laserscan_cloud_world.py
   scripts/random_obstacles.py

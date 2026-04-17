@@ -36,9 +36,18 @@
 
   <param name="robot_description" textfile="$(arg robot_urdf)"/>
 
-  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" output="screen">
-    <param name="use_gui" value="false"/>
-    <param name="rate" value="40"/>
+  <node name="ackermann_joint_state_bridge" pkg="ros_gazebo_obstacle_car" type="ackermann_joint_state_bridge.py" output="screen">
+    <param name="wheelbase" value="0.5266"/>
+    <param name="track" value="0.4413"/>
+    <param name="wheel_radius" value="0.11"/>
+    <param name="steer_max" value="0.52"/>
+    <param name="min_speed_for_steer" value="0.08"/>
+    <param name="cmd_timeout" value="0.4"/>
+    <param name="left_steer_sign" value="-1.0"/>
+    <param name="right_steer_sign" value="1.0"/>
+    <param name="left_steer_offset" value="0.0"/>
+    <param name="right_steer_offset" value="0.0"/>
+    <param name="publish_rate" value="40.0"/>
   </node>
 
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
@@ -131,7 +140,7 @@
     <param name="color/b" value="0.0"/>
     <param name="covariance_scale" value="100.0"/>
     <param name="robot_scale" value="1.0"/>
-    <param name="tf45" value="true"/>
+    <param name="tf45" value="false"/>
   </node>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ros_gazebo_obstacle_car)/rviz/demo.rviz" output="screen"/>

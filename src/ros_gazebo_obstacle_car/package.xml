@@ -15,7 +15,11 @@
   <depend>nav_msgs</depend>
   <depend>quadrotor_msgs</depend>
   <depend>gazebo_ros</depend>
+  <depend>gazebo_ros_control</depend>
   <depend>gazebo_msgs</depend>
+  <depend>controller_manager</depend>
+  <depend>joint_state_controller</depend>
+  <depend>position_controllers</depend>
   <depend>tf</depend>
   <depend>tf2_ros</depend>
   <depend>std_msgs</depend>
