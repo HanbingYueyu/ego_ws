@@ -47,6 +47,13 @@
     <param name="right_steer_sign" value="1.0"/>
     <param name="left_steer_offset" value="0.0"/>
     <param name="right_steer_offset" value="0.0"/>
+    <param name="left_steer_joint" value="left1_joint"/>
+    <param name="right_steer_joint" value="right1_joint"/>
+    <param name="sync_gazebo_steering" value="true"/>
+    <param name="gazebo_model_name" value="top_akm_dl_robot"/>
+    <param name="gazebo_urdf_param_name" value="robot_description"/>
+    <param name="gazebo_service_name" value="/gazebo/set_model_configuration"/>
+    <param name="gazebo_sync_rate" value="40.0"/>
     <param name="publish_rate" value="40.0"/>
   </node>
 
