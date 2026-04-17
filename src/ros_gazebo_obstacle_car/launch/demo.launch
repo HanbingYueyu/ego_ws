@@ -1,6 +1,7 @@
 <launch>
   <arg name="world_name" default="$(find ros_gazebo_obstacle_car)/world/football_field.world"/>
   <arg name="use_sim_time" default="true"/>
+  <arg name="robot_urdf" default="$(find top_akm_dl_robot)/urdf/top_akm_dl_robot.urdf"/>
   <arg name="seed" default="42"/>
   <arg name="obstacle_count" default="22"/>
   <arg name="spawn_z" default="0.15"/>
@@ -33,14 +34,19 @@
     <arg name="debug" value="false"/>
   </include>
 
-  <param name="robot_description" command="$(find xacro)/xacro $(find ros_gazebo_obstacle_car)/urdf/tricycle_with_laser.xacro"/>
+  <param name="robot_description" textfile="$(arg robot_urdf)"/>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" output="screen">
+    <param name="use_gui" value="false"/>
+    <param name="rate" value="40"/>
+  </node>
 
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
 
   <node name="world_to_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 world odom"/>
 
     <node name="spawn_ackermann_4w" pkg="gazebo_ros" type="spawn_model" output="screen"
-      args="-urdf -model ackermann_4w -param robot_description -x 0 -y 0 -z $(arg spawn_z) -Y 0"/>
+      args="-urdf -model top_akm_dl_robot -param robot_description -x 0 -y 0 -z $(arg spawn_z) -Y 0"/>
 
   <node name="football_random_obstacles" pkg="ros_gazebo_obstacle_car" type="random_obstacles.py" output="screen">
     <param name="seed" value="$(arg seed)"/>
@@ -118,7 +124,7 @@
 
   <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
     <remap from="~odom" to="/odom"/>
-    <param name="mesh_resource" value="package://ros_gazebo_obstacle_car/meshes/ackermann_body.stl"/>
+    <param name="mesh_resource" value="package://top_akm_dl_robot/top_akm_dl_robot_meshes/base_link.STL"/>
     <param name="color/a" value="1.0"/>
     <param name="color/r" value="0.0"/>
     <param name="color/g" value="0.0"/>
