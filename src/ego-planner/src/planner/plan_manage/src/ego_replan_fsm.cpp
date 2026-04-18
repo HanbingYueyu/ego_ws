@@ -23,8 +23,11 @@ namespace ego_planner
     nh.param("fsm/replan_sync_with_odom", replan_sync_with_odom_, false);
     nh.param("fsm/replan_odom_err_thresh", replan_odom_err_thresh_, 0.8);
     nh.param("fsm/goal_reach_odom_thresh", goal_reach_odom_thresh_, 0.5);
+    nh.param("fsm/periodic_odom_sync_interval", periodic_odom_sync_interval_, 0.0);
     nh.param("fsm/reanchor_global_traj_on_detour", reanchor_global_traj_on_detour_, true);
     nh.param("fsm/global_reanchor_dist_thresh", global_reanchor_dist_thresh_, 1.2);
+
+    last_periodic_odom_sync_time_ = ros::Time(0);
 
     nh.param("fsm/waypoint_num", waypoint_num_, -1);
     for (int i = 0; i < waypoint_num_; i++)
@@ -334,6 +337,12 @@ namespace ego_planner
         // cout << "near start" << endl;
         return;
       }
+      else if (periodic_odom_sync_interval_ > 1e-3 &&
+               (time_now - last_periodic_odom_sync_time_).toSec() >= periodic_odom_sync_interval_)
+      {
+        // Periodically force a replan from odom to prevent planner/execution drift.
+        changeFSMExecState(REPLAN_TRAJ, "FSM_PERIODIC_SYNC");
+      }
       else
       {
         changeFSMExecState(REPLAN_TRAJ, "FSM");
@@ -382,11 +391,22 @@ namespace ego_planner
     start_acc_ = traj_acc;
 
     const double odom_err = (odom_pos_ - traj_pt).norm();
-    if (replan_sync_with_odom_ && odom_err > replan_odom_err_thresh_)
+    const bool periodic_force_sync = periodic_odom_sync_interval_ > 1e-3 &&
+                                     (time_now - last_periodic_odom_sync_time_).toSec() >= periodic_odom_sync_interval_;
+    if (periodic_force_sync)
     {
       start_pt_ = odom_pos_;
       start_vel_ = odom_vel_;
       start_acc_.setZero();
+      last_periodic_odom_sync_time_ = time_now;
+      ROS_WARN_THROTTLE(0.5, "[FSM] periodic odom sync replan: interval=%.2f s", periodic_odom_sync_interval_);
+    }
+    else if (replan_sync_with_odom_ && odom_err > replan_odom_err_thresh_)
+    {
+      start_pt_ = odom_pos_;
+      start_vel_ = odom_vel_;
+      start_acc_.setZero();
+      last_periodic_odom_sync_time_ = time_now;
       ROS_WARN_THROTTLE(0.5, "[FSM] odom-sync replan: odom-traj error=%.3f > %.3f", odom_err, replan_odom_err_thresh_);
     }
 

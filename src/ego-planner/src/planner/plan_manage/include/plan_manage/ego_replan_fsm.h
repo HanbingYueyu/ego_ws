@@ -59,6 +59,7 @@ namespace ego_planner
     bool replan_sync_with_odom_;
     double replan_odom_err_thresh_;
     double goal_reach_odom_thresh_;
+    double periodic_odom_sync_interval_;
     bool reanchor_global_traj_on_detour_;
     double global_reanchor_dist_thresh_;
 
@@ -66,6 +67,7 @@ namespace ego_planner
     bool trigger_, have_target_, have_odom_, have_new_target_;
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
+    ros::Time last_periodic_odom_sync_time_;
 
     Eigen::Vector3d odom_pos_, odom_vel_, odom_acc_; // odometry state
     Eigen::Quaterniond odom_orient_;
