@@ -1,0 +1,126 @@
+<launch>
+  <arg name="vehicle" default="iris"/>
+  <arg name="uav_sdf" default="$(env HOME)/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris_velodyne/iris_velodyne.sdf"/>
+  <arg name="world_frame" default="world"/>
+  <arg name="uav_odom_topic" default="/mavros/local_position/odom"/>
+  <arg name="uav_lidar_frame" default="velodyne_link"/>
+  <arg name="uav_lidar_z_offset" default="0.2"/>
+
+  <arg name="car_model" default="top_akm_dl_robot"/>
+  <arg name="car_urdf" default="$(find top_akm_dl_robot)/urdf/top_akm_dl_robot.urdf"/>
+  <arg name="car_spawn_x" default="3.0"/>
+  <arg name="car_spawn_y" default="0.0"/>
+  <arg name="car_spawn_z" default="0.15"/>
+  <arg name="car_spawn_yaw" default="0.0"/>
+  <arg name="start_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find uav_car_coop)/rviz/coop_all_in_one.rviz"/>
+  <arg name="publish_px4_map_tf" default="true"/>
+
+  <!-- PX4 SITL + UAV lidar pipeline -->
+  <include file="$(find px4)/launch/mavros_posix_sitl.launch">
+    <arg name="vehicle" value="$(arg vehicle)"/>
+    <arg name="sdf" value="$(arg uav_sdf)"/>
+  </include>
+
+  <node pkg="px4_ego_lidar" type="random_obstacles.py" name="uav_random_obstacles" output="screen"/>
+
+  <node pkg="uav_car_coop" type="uav_world_tf_bridge.py" name="uav_world_tf_bridge" output="screen">
+    <param name="world_frame" value="$(arg world_frame)"/>
+    <param name="odom_topic" value="$(arg uav_odom_topic)"/>
+    <param name="drone_frame" value="uav_base_link"/>
+    <param name="lidar_frame" value="$(arg uav_lidar_frame)"/>
+    <param name="lidar_z_offset" value="$(arg uav_lidar_z_offset)"/>
+    <param name="publish_marker" value="true"/>
+  </node>
+
+  <node pkg="px4_ego_lidar" type="velodyne_to_world.py" name="velodyne_to_world" output="screen">
+    <param name="target_frame" value="$(arg world_frame)"/>
+    <param name="cloud_in" value="/velodyne_points"/>
+    <param name="cloud_out" value="/velodyne_points_world"/>
+  </node>
+
+  <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen"/>
+
+  <include file="$(find ego_planner)/launch/run_in_sim.launch">
+    <arg name="grid_map_cloud" value="/velodyne_points_world"/>
+  </include>
+
+  <!-- Car model + car-side perception/control in the same Gazebo world -->
+  <param name="robot_description" textfile="$(arg car_urdf)"/>
+
+  <node name="spawn_ackermann_4w" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args="-urdf -model $(arg car_model) -param robot_description -x $(arg car_spawn_x) -y $(arg car_spawn_y) -z $(arg car_spawn_z) -Y $(arg car_spawn_yaw)"/>
+
+  <node name="ackermann_joint_state_bridge" pkg="ros_gazebo_obstacle_car" type="ackermann_joint_state_bridge.py" output="screen">
+    <param name="wheelbase" value="0.5266"/>
+    <param name="track" value="0.4413"/>
+    <param name="wheel_radius" value="0.11"/>
+    <param name="steer_max" value="0.52"/>
+    <param name="min_speed_for_steer" value="0.08"/>
+    <param name="cmd_timeout" value="0.4"/>
+    <param name="left_steer_sign" value="-1.0"/>
+    <param name="right_steer_sign" value="1.0"/>
+    <param name="left_steer_offset" value="0.0"/>
+    <param name="right_steer_offset" value="0.0"/>
+    <param name="left_steer_joint" value="left1_joint"/>
+    <param name="right_steer_joint" value="right1_joint"/>
+    <param name="sync_gazebo_steering" value="true"/>
+    <param name="gazebo_model_name" value="$(arg car_model)"/>
+    <param name="gazebo_urdf_param_name" value="robot_description"/>
+    <param name="gazebo_service_name" value="/gazebo/set_model_configuration"/>
+    <param name="gazebo_sync_rate" value="40.0"/>
+    <param name="publish_rate" value="40.0"/>
+  </node>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+  <node name="world_to_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 $(arg world_frame) odom"/>
+  <node if="$(arg publish_px4_map_tf)" name="world_to_map" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 $(arg world_frame) map"/>
+  <node if="$(arg publish_px4_map_tf)" name="world_to_map_ned" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 $(arg world_frame) map_ned"/>
+
+  <node name="scan_cloud_world" pkg="ros_gazebo_obstacle_car" type="laserscan_cloud_world.py" output="screen">
+    <param name="scan_in" value="/scan"/>
+    <param name="cloud_out" value="/scan_cloud_world"/>
+    <param name="target_frame" value="$(arg world_frame)"/>
+    <param name="use_inf_points" value="false"/>
+    <param name="range_max_margin" value="0.08"/>
+  </node>
+
+  <node name="ego_car_controller" pkg="ros_gazebo_obstacle_car" type="ego_car_controller.py" output="screen">
+    <param name="v_max" value="0.85"/>
+    <param name="k_pos" value="0.55"/>
+    <param name="k_w" value="1.8"/>
+    <param name="k_w_fast_turn" value="2.2"/>
+    <param name="use_pos_fallback" value="true"/>
+    <param name="steer_sign" value="1.0"/>
+    <param name="k_yaw_damp" value="0.35"/>
+    <param name="allow_reverse_align" value="false"/>
+    <param name="reverse_yaw_thresh" value="1.45"/>
+    <param name="reverse_speed" value="0.12"/>
+    <param name="v_reverse_max" value="0.25"/>
+    <param name="align_speed_cap" value="0.55"/>
+    <param name="steer_max" value="1.35"/>
+    <param name="min_drive_speed" value="0.10"/>
+    <param name="min_align_speed" value="0.06"/>
+    <param name="align_steer_max" value="0.70"/>
+    <param name="yaw_deadband" value="0.05"/>
+    <param name="goal_tolerance" value="0.35"/>
+    <param name="yaw_slow_thresh" value="0.85"/>
+    <param name="turn_in_place_thresh" value="1.10"/>
+    <param name="vel_heading_thresh" value="0.08"/>
+    <param name="lookahead_time" value="0.45"/>
+    <param name="motion_yaw_min_speed" value="0.04"/>
+    <param name="yaw_ref_rate_limit" value="1.2"/>
+    <param name="steer_rate_limit" value="2.2"/>
+    <param name="hard_brake_yaw_thresh" value="1.7"/>
+    <param name="safety_enable" value="true"/>
+    <param name="safety_stop_dist" value="1.05"/>
+    <param name="safety_slow_dist" value="2.20"/>
+    <param name="safety_turn_rate" value="0.95"/>
+    <param name="safety_scan_timeout" value="0.35"/>
+    <param name="safety_front_half_angle_deg" value="35.0"/>
+    <param name="safety_side_angle_deg" value="75.0"/>
+  </node>
+
+    <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="rviz_global"
+      args="-d $(arg rviz_config)" output="screen"/>
+</launch>

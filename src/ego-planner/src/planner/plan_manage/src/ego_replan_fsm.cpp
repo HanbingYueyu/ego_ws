@@ -289,6 +289,15 @@ namespace ego_planner
     case REPLAN_TRAJ:
     {
 
+      // If odom is already close enough to goal, stop replanning and wait for a new target.
+      if ((end_pt_ - odom_pos_).norm() < goal_reach_odom_thresh_)
+      {
+        have_target_ = false;
+        have_new_target_ = false;
+        changeFSMExecState(WAIT_TARGET, "FSM_GOAL_REACHED_REPLAN");
+        break;
+      }
+
       if (planFromCurrentTraj())
       {
         changeFSMExecState(EXEC_TRAJ, "FSM");
