@@ -12,16 +12,16 @@
   <arg name="field_goal_y" default="0.0"/>
   <arg name="auto_start_goal" default="true"/>
 
-  <arg name="car_model" default="top_akm_dl_robot"/>
-  <arg name="car_urdf" default="$(find top_akm_dl_robot)/urdf/top_akm_dl_robot.urdf"/>
+  <arg name="car_model" default="tricycle"/>
+  <arg name="car_xacro" default="$(find ros_gazebo_obstacle_car)/urdf/tricycle_with_laser.xacro"/>
   <arg name="car_spawn_x" default="-25.0"/>
   <arg name="car_spawn_y" default="0.0"/>
   <arg name="car_spawn_z" default="0.15"/>
   <arg name="car_spawn_yaw" default="0.0"/>
   <arg name="car_goal_topic" default="/car/move_base_simple/goal"/>
-  <arg name="car_max_vel" default="1.50"/>
-  <arg name="car_max_acc" default="1.70"/>
-  <arg name="car_ctrl_v_max" default="1.35"/>
+  <arg name="car_max_vel" default="0.85"/>
+  <arg name="car_max_acc" default="0.8"/>
+  <arg name="car_ctrl_v_max" default="0.85"/>
   <arg name="start_rviz" default="true"/>
   <arg name="rviz_config" default="$(find uav_car_coop)/rviz/coop_all_in_one.rviz"/>
   <arg name="publish_px4_map_tf" default="true"/>
@@ -32,7 +32,7 @@
     <arg name="sdf" value="$(arg uav_sdf)"/>
     <arg name="x" value="$(arg field_start_x)"/>
     <arg name="y" value="0.0"/>
-    <arg name="z" value="0.0"/>
+    <arg name="z" value="0.15"/>
     <arg name="fcu_url" value="udp://:14540@localhost:14580"/>
   </include>
 
@@ -131,7 +131,7 @@
     <include file="$(find px4)/launch/single_vehicle_spawn.launch">
       <arg name="x" value="$(arg field_start_x)"/>
       <arg name="y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>
-      <arg name="z" value="0.0"/>
+      <arg name="z" value="0.15"/>
       <arg name="R" value="0.0"/>
       <arg name="P" value="0.0"/>
       <arg name="Y" value="0.0"/>
@@ -198,7 +198,7 @@
     <include file="$(find px4)/launch/single_vehicle_spawn.launch">
       <arg name="x" value="$(arg field_start_x)"/>
       <arg name="y" value="$(eval -1.0 * float(arg('formation_spacing')))"/>
-      <arg name="z" value="0.0"/>
+      <arg name="z" value="0.15"/>
       <arg name="R" value="0.0"/>
       <arg name="P" value="0.0"/>
       <arg name="Y" value="0.0"/>
@@ -265,7 +265,7 @@
     <include file="$(find px4)/launch/single_vehicle_spawn.launch">
       <arg name="x" value="$(arg field_start_x)"/>
       <arg name="y" value="$(arg formation_spacing)"/>
-      <arg name="z" value="0.0"/>
+      <arg name="z" value="0.15"/>
       <arg name="R" value="0.0"/>
       <arg name="P" value="0.0"/>
       <arg name="Y" value="0.0"/>
@@ -332,7 +332,7 @@
     <include file="$(find px4)/launch/single_vehicle_spawn.launch">
       <arg name="x" value="$(arg field_start_x)"/>
       <arg name="y" value="$(eval 2.0 * float(arg('formation_spacing')))"/>
-      <arg name="z" value="0.0"/>
+      <arg name="z" value="0.15"/>
       <arg name="R" value="0.0"/>
       <arg name="P" value="0.0"/>
       <arg name="Y" value="0.0"/>
@@ -430,31 +430,10 @@
   </group>
 
   <!-- Car model + car-side perception/control in the same Gazebo world -->
-  <param name="robot_description" textfile="$(arg car_urdf)"/>
+  <param name="robot_description" command="$(find xacro)/xacro $(arg car_xacro)"/>
 
-  <node name="spawn_ackermann_4w" pkg="gazebo_ros" type="spawn_model" output="screen"
+  <node name="spawn_tricycle" pkg="gazebo_ros" type="spawn_model" output="screen"
         args="-urdf -model $(arg car_model) -param robot_description -x $(arg car_spawn_x) -y $(arg car_spawn_y) -z $(arg car_spawn_z) -Y $(arg car_spawn_yaw)"/>
-
-  <node name="ackermann_joint_state_bridge" pkg="ros_gazebo_obstacle_car" type="ackermann_joint_state_bridge.py" output="screen">
-    <param name="wheelbase" value="0.5266"/>
-    <param name="track" value="0.4413"/>
-    <param name="wheel_radius" value="0.11"/>
-    <param name="steer_max" value="0.52"/>
-    <param name="min_speed_for_steer" value="0.08"/>
-    <param name="cmd_timeout" value="0.4"/>
-    <param name="left_steer_sign" value="-1.0"/>
-    <param name="right_steer_sign" value="1.0"/>
-    <param name="left_steer_offset" value="0.0"/>
-    <param name="right_steer_offset" value="0.0"/>
-    <param name="left_steer_joint" value="left1_joint"/>
-    <param name="right_steer_joint" value="right1_joint"/>
-    <param name="sync_gazebo_steering" value="true"/>
-    <param name="gazebo_model_name" value="$(arg car_model)"/>
-    <param name="gazebo_urdf_param_name" value="robot_description"/>
-    <param name="gazebo_service_name" value="/gazebo/set_model_configuration"/>
-    <param name="gazebo_sync_rate" value="40.0"/>
-    <param name="publish_rate" value="40.0"/>
-  </node>
 
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
   <node name="world_to_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 $(arg world_frame) odom"/>

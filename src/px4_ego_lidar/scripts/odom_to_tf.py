@@ -8,7 +8,6 @@ from visualization_msgs.msg import Marker
 
 def odom_callback(msg):
     # 1. 广播 TF 坐标树 (给雷达投影用)
-    br = tf2_ros.TransformBroadcaster()
     t = TransformStamped()
     t.header.stamp = msg.header.stamp 
     t.header.frame_id = WORLD_FRAME
@@ -17,6 +16,8 @@ def odom_callback(msg):
     t.transform.translation.y = msg.pose.pose.position.y + WORLD_OFFSET_Y
     t.transform.translation.z = msg.pose.pose.position.z + WORLD_OFFSET_Z
     t.transform.rotation = msg.pose.pose.orientation
+    
+    # 使用在主函数中初始化的 broadcaster
     br.sendTransform(t)
 
     # 2. 强制在 RViz 中画一个代表无人机的“亮黄色方块”
@@ -59,8 +60,10 @@ if __name__ == '__main__':
     world_offset_z = float(rospy.get_param("~world_offset_z", 0.0))
 
     # 初始化发布器
-    global marker_pub
+    global marker_pub, br
+    br = tf2_ros.TransformBroadcaster()
     marker_pub = rospy.Publisher(marker_topic, Marker, queue_size=1)
+    
     globals()["WORLD_FRAME"] = world_frame
     globals()["BASE_FRAME"] = base_frame
     globals()["WORLD_OFFSET_X"] = world_offset_x
