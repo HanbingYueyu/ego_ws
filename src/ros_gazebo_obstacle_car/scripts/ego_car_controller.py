@@ -6,6 +6,7 @@ import math
 
 import rospy
 from geometry_msgs.msg import Twist
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from quadrotor_msgs.msg import PositionCommand
 from sensor_msgs.msg import LaserScan
@@ -40,6 +41,18 @@ class EgoCarController:
         self.reverse_yaw_thresh = rospy.get_param("~reverse_yaw_thresh", 1.45)
         self.reverse_speed = rospy.get_param("~reverse_speed", 0.12)
         self.v_reverse_max = rospy.get_param("~v_reverse_max", 0.25)
+        self.reverse_track_enable = rospy.get_param("~reverse_track_enable", self.allow_reverse_align)
+        self.reverse_track_min_dist = rospy.get_param("~reverse_track_min_dist", 0.8)
+        self.reverse_track_max_dist = rospy.get_param("~reverse_track_max_dist", 3.0)
+        self.reverse_track_enter_thresh = rospy.get_param("~reverse_track_enter_thresh", 1.75)
+        self.reverse_track_exit_thresh = rospy.get_param("~reverse_track_exit_thresh", 1.10)
+        self.reverse_heading_margin = rospy.get_param("~reverse_heading_margin", 0.30)
+        self.reverse_gain = rospy.get_param("~reverse_gain", 0.45)
+        self.forward_turn_min_radius = rospy.get_param("~forward_turn_min_radius", 1.15)
+        self.forward_turn_radius_margin = rospy.get_param("~forward_turn_radius_margin", 0.15)
+        self.forward_turn_lateral_deadband = rospy.get_param("~forward_turn_lateral_deadband", 0.18)
+        self.reverse_track_confirm_time = rospy.get_param("~reverse_track_confirm_time", 0.45)
+        self.reverse_track_front_confirm_dist = rospy.get_param("~reverse_track_front_confirm_dist", 1.35)
         self.align_speed_cap = rospy.get_param("~align_speed_cap", 0.55)
         self.yaw_rate_max = rospy.get_param("~yaw_rate_max", rospy.get_param("~steer_max", 1.35))
         self.min_drive_speed = rospy.get_param("~min_drive_speed", 0.12)
@@ -62,18 +75,33 @@ class EgoCarController:
         self.safety_scan_timeout = rospy.get_param("~safety_scan_timeout", 0.35)
         self.safety_front_half_angle_deg = rospy.get_param("~safety_front_half_angle_deg", 35.0)
         self.safety_side_angle_deg = rospy.get_param("~safety_side_angle_deg", 75.0)
+        self.turn_to_goal_enable = rospy.get_param("~turn_to_goal_enable", True)
+        self.turn_to_goal_enter_deg = rospy.get_param("~turn_to_goal_enter_deg", 130.0)
+        self.turn_to_goal_exit_deg = rospy.get_param("~turn_to_goal_exit_deg", 20.0)
+        self.turn_to_goal_speed = rospy.get_param("~turn_to_goal_speed", 0.10)
+        self.turn_to_goal_yaw_rate_max = rospy.get_param("~turn_to_goal_yaw_rate_max", self.align_yaw_rate_max)
+        self.goal_topic = rospy.get_param("~goal_topic", "/car/move_base_simple/goal")
         self.debug_turn_events = rospy.get_param("~debug_turn_events", True)
+        self.odom_topic = rospy.get_param("~odom_topic", "/odom")
+        self.cmd_topic = rospy.get_param("~cmd_topic", "/planning/pos_cmd")
+        self.scan_topic = rospy.get_param("~scan_topic", "/scan")
         self.last_yaw_rate_cmd = 0.0
         self.last_yaw_ref = 0.0
         self.has_last_yaw_ref = False
+        self.turn_to_goal_active = False
+        self.last_goal = None
+        self.last_goal_time = rospy.Time(0)
+        self.reverse_track_active = False
+        self.reverse_track_candidate_since = rospy.Time(0)
         self.front_min_dist = float("inf")
         self.left_mean_dist = float("inf")
         self.right_mean_dist = float("inf")
         self.last_scan_time = rospy.Time(0)
 
-        rospy.Subscriber("/odom", Odometry, self.odom_cb, queue_size=10)
-        rospy.Subscriber("/planning/pos_cmd", PositionCommand, self.cmd_cb, queue_size=10)
-        rospy.Subscriber("/scan", LaserScan, self.scan_cb, queue_size=10)
+        rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb, queue_size=10)
+        rospy.Subscriber(self.cmd_topic, PositionCommand, self.cmd_cb, queue_size=10)
+        rospy.Subscriber(self.goal_topic, PoseStamped, self.goal_cb, queue_size=5)
+        rospy.Subscriber(self.scan_topic, LaserScan, self.scan_cb, queue_size=10)
         self.pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
         self.rate = rospy.Rate(50.0)
 
@@ -87,6 +115,40 @@ class EgoCarController:
     def cmd_cb(self, msg):
         self.last_cmd = msg
         self.last_cmd_time = rospy.Time.now()
+
+    def goal_cb(self, msg):
+        self.last_goal = msg
+        self.last_goal_time = rospy.Time.now()
+
+    def target_in_body_frame(self, dx, dy):
+        cos_yaw = math.cos(self.yaw)
+        sin_yaw = math.sin(self.yaw)
+        x_body = cos_yaw * dx + sin_yaw * dy
+        y_body = -sin_yaw * dx + cos_yaw * dy
+        return x_body, y_body
+
+    def required_forward_turn_radius(self, x_body, y_body):
+        if x_body <= 0.0:
+            return 0.0
+        if abs(y_body) <= self.forward_turn_lateral_deadband:
+            return float("inf")
+        return (x_body * x_body + y_body * y_body) / (2.0 * abs(y_body))
+
+    def goal_heading_error(self, cmd, now):
+        if self.last_goal is not None and (now - self.last_goal_time).to_sec() <= 20.0:
+            gx = self.last_goal.pose.position.x
+            gy = self.last_goal.pose.position.y
+        else:
+            gx = cmd.position.x
+            gy = cmd.position.y
+
+        dx = gx - self.x
+        dy = gy - self.y
+        goal_dist = math.hypot(dx, dy)
+        if goal_dist < self.goal_tolerance:
+            return 0.0, self.yaw, goal_dist
+        goal_yaw = math.atan2(dy, dx)
+        return wrap_pi(goal_yaw - self.yaw), goal_yaw, goal_dist
 
     def scan_cb(self, msg):
         front_half = math.radians(self.safety_front_half_angle_deg)
@@ -123,8 +185,9 @@ class EgoCarController:
         twist = Twist()
         dt = 1.0 / 50.0
         while not rospy.is_shutdown():
+            now = rospy.Time.now()
             cmd = self.last_cmd
-            if cmd is None or (rospy.Time.now() - self.last_cmd_time).to_sec() > self.cmd_timeout:
+            if cmd is None or (now - self.last_cmd_time).to_sec() > self.cmd_timeout:
                 twist.linear.x = 0.0
                 twist.angular.z = 0.0
                 self.last_yaw_rate_cmd = 0.0
@@ -137,6 +200,7 @@ class EgoCarController:
             dx = cmd.position.x - self.x
             dy = cmd.position.y - self.y
             dist = math.sqrt(dx * dx + dy * dy)
+            x_body, y_body = self.target_in_body_frame(dx, dy)
 
             v_ff = math.sqrt(vx * vx + vy * vy)
             if v_ff > 0.05:
@@ -178,28 +242,104 @@ class EgoCarController:
             self.last_yaw_ref = yaw_ref
             self.has_last_yaw_ref = True
 
-            yaw_error = wrap_pi(yaw_ref - self.yaw)
+            forward_yaw_ref = yaw_ref
+            forward_yaw_error = wrap_pi(forward_yaw_ref - self.yaw)
+            goal_yaw_error, goal_yaw_ref, goal_dist = self.goal_heading_error(cmd, now)
+            abs_goal_yaw_error = abs(goal_yaw_error)
+            turn_enter = math.radians(self.turn_to_goal_enter_deg)
+            turn_exit = math.radians(self.turn_to_goal_exit_deg)
+            if self.turn_to_goal_enable and goal_dist > self.goal_tolerance:
+                if self.turn_to_goal_active:
+                    if abs_goal_yaw_error < turn_exit:
+                        self.turn_to_goal_active = False
+                        self.has_last_yaw_ref = False
+                elif abs_goal_yaw_error > turn_enter:
+                    self.turn_to_goal_active = True
+                    self.reverse_track_active = False
+                    self.reverse_track_candidate_since = rospy.Time(0)
+
+            required_turn_radius = self.required_forward_turn_radius(x_body, y_body)
+            forward_turn_feasible = (
+                dist > self.reverse_track_max_dist
+                or required_turn_radius >= (self.forward_turn_min_radius + self.forward_turn_radius_margin)
+            )
+            reverse_track_allowed = self.reverse_track_enable and dist > self.reverse_track_min_dist
+            reverse_preferred = reverse_track_allowed and (not forward_turn_feasible)
+            front_blocked = (
+                self.safety_enable
+                and (now - self.last_scan_time).to_sec() <= self.safety_scan_timeout
+                and math.isfinite(self.front_min_dist)
+                and self.front_min_dist < self.reverse_track_front_confirm_dist
+            )
+            reverse_confirmed = False
+            if reverse_preferred:
+                if self.reverse_track_candidate_since == rospy.Time(0):
+                    self.reverse_track_candidate_since = now
+                confirm_time = self.reverse_track_confirm_time
+                if front_blocked:
+                    confirm_time *= 0.5
+                reverse_confirmed = (now - self.reverse_track_candidate_since).to_sec() >= confirm_time
+            else:
+                self.reverse_track_candidate_since = rospy.Time(0)
+            reverse_hold = (
+                reverse_track_allowed
+                and self.reverse_track_active
+                and (
+                    dist <= self.reverse_track_max_dist
+                    and (
+                        required_turn_radius < self.forward_turn_min_radius
+                        or abs(forward_yaw_error) > self.reverse_track_exit_thresh
+                    )
+                )
+            )
+            self.reverse_track_active = reverse_confirmed or reverse_hold
+
+            track_mode = "reverse" if self.reverse_track_active else "forward"
+            yaw_error = forward_yaw_error
             abs_yaw_error = abs(yaw_error)
             k_turn = self.k_w_fast_turn if abs_yaw_error > self.yaw_slow_thresh else self.k_w
             yaw_rate_cmd = self.yaw_rate_sign * (k_turn * yaw_error - self.k_yaw_damp * self.yaw_rate)
             yaw_rate_limit = self.yaw_rate_max
             turn_phase = "track"
 
+            if self.turn_to_goal_active:
+                track_mode = "turn_to_goal"
+                turn_phase = "turn_to_goal"
+                yaw_error = goal_yaw_error
+                abs_yaw_error = abs_goal_yaw_error
+                yaw_rate_cmd = self.yaw_rate_sign * (
+                    self.k_w_fast_turn * yaw_error - self.k_yaw_damp * self.yaw_rate
+                )
+                yaw_rate_limit = self.turn_to_goal_yaw_rate_max
+                v_ref = min(max(0.0, self.turn_to_goal_speed), self.align_speed_cap)
+                forward_yaw_ref = goal_yaw_ref
+                self.reverse_track_active = False
+
+            if self.reverse_track_active:
+                reverse_ref = max(self.reverse_speed, self.reverse_gain * dist)
+                v_ref = -min(self.v_reverse_max, reverse_ref)
+                turn_phase = "reverse_align"
+
             # Large heading error: move slowly while steering, avoid stationary steering lock.
-            if abs_yaw_error > self.hard_brake_yaw_thresh:
-                if self.allow_reverse_align and abs_yaw_error > self.reverse_yaw_thresh:
+            if self.turn_to_goal_active:
+                yaw_rate_limit = self.turn_to_goal_yaw_rate_max
+            elif abs_yaw_error > self.hard_brake_yaw_thresh:
+                if self.reverse_track_active:
                     turn_phase = "align_reverse"
-                    v_ref = -self.reverse_speed
+                    v_ref = min(v_ref, -self.min_align_speed)
                 else:
                     turn_phase = "align_hard"
                     v_ref = max(self.min_align_speed, min(v_ref, self.align_speed_cap * 0.75))
                 yaw_rate_limit = self.align_yaw_rate_max
             elif abs_yaw_error > self.turn_in_place_thresh:
-                turn_phase = "align"
-                v_ref = max(self.min_align_speed, min(v_ref * 0.65, self.align_speed_cap))
+                turn_phase = "align_reverse" if self.reverse_track_active else "align"
+                if self.reverse_track_active:
+                    v_ref = min(v_ref, -self.min_align_speed)
+                else:
+                    v_ref = max(self.min_align_speed, min(v_ref * 0.65, self.align_speed_cap))
                 yaw_rate_limit = self.align_yaw_rate_max
             elif abs_yaw_error > self.yaw_slow_thresh:
-                turn_phase = "slow"
+                turn_phase = "slow_reverse" if self.reverse_track_active else "slow"
                 v_ref = v_ref * 0.35
 
             if abs_yaw_error < self.yaw_deadband:
@@ -210,7 +350,7 @@ class EgoCarController:
             # Safety layer for nonholonomic ground robot: cap speed by frontal clearance.
             # This prevents hard collisions when global/local planner produces too-tight paths.
             safety_phase = "none"
-            if self.safety_enable and (rospy.Time.now() - self.last_scan_time).to_sec() <= self.safety_scan_timeout:
+            if self.safety_enable and (now - self.last_scan_time).to_sec() <= self.safety_scan_timeout:
                 front = self.front_min_dist
                 if math.isfinite(front):
                     if front < self.safety_stop_dist:
@@ -227,17 +367,18 @@ class EgoCarController:
                             turn_sign = 1.0 if self.left_mean_dist >= self.right_mean_dist else -1.0
                             yaw_rate_cmd = turn_sign * 0.35
 
-            if self.debug_turn_events and (yaw_ref_limited or abs_yaw_error > self.turn_in_place_thresh):
+            if self.debug_turn_events and (yaw_ref_limited or self.turn_to_goal_active or abs_yaw_error > self.turn_in_place_thresh):
                 align_metric = yaw_error * self.yaw_rate
                 rospy.logwarn_throttle(
                     0.5,
-                    "turn_event phase=%s safety=%s front=%.2f sign=%.1f yaw=%.2f yaw_ref=%.2f err=%.2f yaw_rate=%.2f errYawRate=%.3f dist=%.2f v_ff=%.2f v_cmd=%.2f w=%.2f lim=%s",
+                    "turn_event mode=%s phase=%s safety=%s front=%.2f sign=%.1f yaw=%.2f yaw_ref=%.2f err=%.2f yaw_rate=%.2f errYawRate=%.3f dist=%.2f v_ff=%.2f v_cmd=%.2f w=%.2f lim=%s",
+                    track_mode,
                     turn_phase,
                     safety_phase,
                     self.front_min_dist if math.isfinite(self.front_min_dist) else -1.0,
                     self.yaw_rate_sign,
                     self.yaw,
-                    yaw_ref,
+                    forward_yaw_ref,
                     yaw_error,
                     self.yaw_rate,
                     align_metric,

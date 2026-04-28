@@ -3,8 +3,10 @@
   <arg name="map_size_y" value="80.0"/>
   <arg name="map_size_z" value="6.0"/>
 
-  <arg name="odom_topic" value="/mavros/local_position/odom"/>
+  <arg name="odom_topic" default="/mavros/local_position/odom"/>
   <arg name="grid_map_cloud" default="/velodyne_points"/>
+  <arg name="goal_topic" default="/move_base_simple/goal"/>
+  <arg name="traj_start_trigger_topic" default="/traj_start_trigger"/>
 
   <include file="$(find ego_planner)/launch/advanced_param.xml">
 
@@ -24,10 +26,10 @@
     <arg name="fx" value="387.229248046875"/>
     <arg name="fy" value="387.229248046875"/>
 
-    <arg name="max_vel" value="2.0" />
-    <arg name="max_acc" value="3.0" />
+    <arg name="max_vel" value="1.0" />
+    <arg name="max_acc" value="1.2" />
 
-    <arg name="planning_horizon" value="7.5" /> 
+    <arg name="planning_horizon" value="5.5" /> 
 
     <arg name="flight_type" value="1" />
     
@@ -55,6 +57,12 @@
     
   </include>
 
+  <param name="ego_planner_node/grid_map/obstacles_inflation" value="0.45"/>
+  <param name="ego_planner_node/fsm/thresh_replan" value="0.5"/>
+  <param name="ego_planner_node/fsm/thresh_no_replan" value="1.2"/>
+  <param name="ego_planner_node/fsm/planning_horizon" value="5.5"/>
+  <param name="ego_planner_node/manager/planning_horizon" value="5.5"/>
+
   <node pkg="ego_planner" name="traj_server" type="traj_server" output="screen">
     <remap from="/position_cmd" to="planning/pos_cmd"/>
 
@@ -64,8 +72,8 @@
 
   <node pkg="waypoint_generator" name="waypoint_generator" type="waypoint_generator" output="screen">
     <remap from="~odom" to="$(arg odom_topic)"/>        
-    <remap from="~goal" to="/move_base_simple/goal"/>
-    <remap from="~traj_start_trigger" to="/traj_start_trigger" />
+    <remap from="~goal" to="$(arg goal_topic)"/>
+    <remap from="~traj_start_trigger" to="$(arg traj_start_trigger_topic)" />
     <param name="waypoint_type" value="manual-lonely-waypoint"/>    
   </node>
 

@@ -171,6 +171,7 @@ public:
   void publishDepth();
 
   bool hasDepthObservation();
+  bool hasCloudObservation();
   bool odomValid();
   void getRegion(Eigen::Vector3d& ori, Eigen::Vector3d& size);
   inline double getResolution();

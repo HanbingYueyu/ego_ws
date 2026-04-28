@@ -13,6 +13,13 @@ def main():
     target_frame = rospy.get_param("~target_frame", "world")
     in_topic = rospy.get_param("~cloud_in", "cloud_in")
     out_topic = rospy.get_param("~cloud_out", "cloud_out")
+    ignore_box_enable = rospy.get_param("~ignore_box_enable", True)
+    ignore_box_center_x = rospy.get_param("~ignore_box_center_x", 3.0)
+    ignore_box_center_y = rospy.get_param("~ignore_box_center_y", 0.0)
+    ignore_box_center_z = rospy.get_param("~ignore_box_center_z", 0.6)
+    ignore_box_size_x = rospy.get_param("~ignore_box_size_x", 2.4)
+    ignore_box_size_y = rospy.get_param("~ignore_box_size_y", 1.6)
+    ignore_box_size_z = rospy.get_param("~ignore_box_size_z", 1.6)
 
     tf_buffer = tf2_ros.Buffer(rospy.Duration(10.0))
     tf2_ros.TransformListener(tf_buffer)
@@ -64,6 +71,13 @@ def main():
             nx, ny, nz = _transform_point(x, y, z, t)
             if not (math.isfinite(nx) and math.isfinite(ny) and math.isfinite(nz)):
                 continue
+            if ignore_box_enable:
+                if (
+                    abs(nx - ignore_box_center_x) <= ignore_box_size_x * 0.5
+                    and abs(ny - ignore_box_center_y) <= ignore_box_size_y * 0.5
+                    and abs(nz - ignore_box_center_z) <= ignore_box_size_z * 0.5
+                ):
+                    continue
             p[ix], p[iy], p[iz] = nx, ny, nz
             out_points.append(tuple(p))
 

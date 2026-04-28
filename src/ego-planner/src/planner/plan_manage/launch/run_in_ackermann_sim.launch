@@ -24,9 +24,15 @@
   <arg name="point4_y" default="0.0"/>
   <arg name="point4_z" default="0.25"/>
   <arg name="planner_horizon" default="7.5"/>
+  <arg name="max_vel" default="0.9"/>
+  <arg name="max_acc" default="1.0"/>
   <arg name="odom_sync_err_thresh" default="0.40"/>
   <arg name="periodic_sync_interval" default="0.70"/>
   <arg name="global_reanchor_dist_thresh" default="0.60"/>
+  <arg name="position_cmd_topic" default="planning/pos_cmd"/>
+  <arg name="waypoint_goal_topic" default="/move_base_simple/goal"/>
+  <arg name="traj_start_trigger_topic" default="/traj_start_trigger"/>
+  <arg name="wait_for_cloud_ready" default="false"/>
 
   <include file="$(find ego_planner)/launch/advanced_param.xml">
 
@@ -46,8 +52,8 @@
     <arg name="fx" value="387.229248046875"/>
     <arg name="fy" value="387.229248046875"/>
 
-    <arg name="max_vel" value="0.9" />
-    <arg name="max_acc" value="1.0" />
+    <arg name="max_vel" value="$(arg max_vel)" />
+    <arg name="max_acc" value="$(arg max_acc)" />
 
     <arg name="planning_horizon" value="$(arg planner_horizon)" />
 
@@ -78,30 +84,31 @@
   </include>
 
   <!-- advanced_param.xml only assigns waypoint0/1; set waypoint2~4 explicitly for ackermann case -->
-  <param name="/ego_planner_node/fsm/waypoint2_x" value="$(arg point2_x)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint2_y" value="$(arg point2_y)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint2_z" value="$(arg point2_z)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint3_x" value="$(arg point3_x)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint3_y" value="$(arg point3_y)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint3_z" value="$(arg point3_z)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint4_x" value="$(arg point4_x)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint4_y" value="$(arg point4_y)" type="double"/>
-  <param name="/ego_planner_node/fsm/waypoint4_z" value="$(arg point4_z)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint2_x" value="$(arg point2_x)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint2_y" value="$(arg point2_y)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint2_z" value="$(arg point2_z)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint3_x" value="$(arg point3_x)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint3_y" value="$(arg point3_y)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint3_z" value="$(arg point3_z)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint4_x" value="$(arg point4_x)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint4_y" value="$(arg point4_y)" type="double"/>
+  <param name="ego_planner_node/fsm/waypoint4_z" value="$(arg point4_z)" type="double"/>
 
   <!-- Override advanced_param defaults for ground-car behavior after obstacle detours. -->
-  <param name="/ego_planner_node/fsm/planning_horizon" value="$(arg planner_horizon)"/>
-  <param name="/ego_planner_node/manager/planning_horizon" value="$(arg planner_horizon)"/>
+  <param name="ego_planner_node/fsm/planning_horizon" value="$(arg planner_horizon)"/>
+  <param name="ego_planner_node/manager/planning_horizon" value="$(arg planner_horizon)"/>
 
-  <param name="/ego_planner_node/fsm/replan_sync_with_odom" value="true"/>
-  <param name="/ego_planner_node/fsm/replan_odom_err_thresh" value="$(arg odom_sync_err_thresh)"/>
-  <param name="/ego_planner_node/fsm/goal_reach_odom_thresh" value="0.45"/>
-  <param name="/ego_planner_node/fsm/periodic_odom_sync_interval" value="$(arg periodic_sync_interval)"/>
-  <param name="/ego_planner_node/fsm/reanchor_global_traj_on_detour" value="true"/>
-  <param name="/ego_planner_node/fsm/global_reanchor_dist_thresh" value="$(arg global_reanchor_dist_thresh)"/>
-  <param name="/ego_planner_node/manager/lock_ground_z" value="true"/>
+  <param name="ego_planner_node/fsm/replan_sync_with_odom" value="true"/>
+  <param name="ego_planner_node/fsm/replan_odom_err_thresh" value="$(arg odom_sync_err_thresh)"/>
+  <param name="ego_planner_node/fsm/goal_reach_odom_thresh" value="0.50"/>
+  <param name="ego_planner_node/fsm/periodic_odom_sync_interval" value="$(arg periodic_sync_interval)"/>
+  <param name="ego_planner_node/fsm/reanchor_global_traj_on_detour" value="true"/>
+  <param name="ego_planner_node/fsm/global_reanchor_dist_thresh" value="$(arg global_reanchor_dist_thresh)"/>
+  <param name="ego_planner_node/manager/lock_ground_z" value="true"/>
+  <param name="ego_planner_node/fsm/wait_for_cloud_ready" value="$(arg wait_for_cloud_ready)"/>
 
   <node pkg="ego_planner" name="traj_server" type="traj_server" output="screen">
-    <remap from="/position_cmd" to="planning/pos_cmd"/>
+    <remap from="/position_cmd" to="$(arg position_cmd_topic)"/>
 
     <remap from="/odom_world" to="$(arg odom_topic)"/>
     <param name="traj_server/time_forward" value="1.0" type="double"/>
@@ -109,8 +116,8 @@
 
   <node pkg="waypoint_generator" name="waypoint_generator" type="waypoint_generator" output="screen">
     <remap from="~odom" to="$(arg odom_topic)"/>
-    <remap from="~goal" to="/move_base_simple/goal"/>
-    <remap from="~traj_start_trigger" to="/traj_start_trigger" />
+    <remap from="~goal" to="$(arg waypoint_goal_topic)"/>
+    <remap from="~traj_start_trigger" to="$(arg traj_start_trigger_topic)" />
     <param name="waypoint_type" value="manual-lonely-waypoint"/>
   </node>
 

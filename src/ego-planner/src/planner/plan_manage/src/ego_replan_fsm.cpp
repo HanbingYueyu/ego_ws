@@ -1,6 +1,7 @@
 
 #include <plan_manage/ego_replan_fsm.h>
 #include <cmath>
+#include <ros/names.h>
 #include <string>
 
 namespace ego_planner
@@ -10,8 +11,12 @@ namespace ego_planner
   {
     current_wp_ = 0;
     exec_state_ = FSM_EXEC_STATE::INIT;
+    trigger_ = false;
     have_target_ = false;
     have_odom_ = false;
+    have_new_target_ = false;
+    have_cloud_ready_ = false;
+    flag_escape_emergency_ = false;
 
     /*  fsm param  */
     nh.param("fsm/flight_type", target_type_, -1);
@@ -26,6 +31,7 @@ namespace ego_planner
     nh.param("fsm/periodic_odom_sync_interval", periodic_odom_sync_interval_, 0.0);
     nh.param("fsm/reanchor_global_traj_on_detour", reanchor_global_traj_on_detour_, true);
     nh.param("fsm/global_reanchor_dist_thresh", global_reanchor_dist_thresh_, 1.2);
+    nh.param("fsm/wait_for_cloud_ready", wait_for_cloud_ready_, false);
 
     last_periodic_odom_sync_time_ = ros::Time(0);
 
@@ -51,16 +57,44 @@ namespace ego_planner
     nh.param<std::string>("odom_topic", odom_topic, std::string("/odom_world"));
     odom_sub_ = nh.subscribe(odom_topic, 50, &EGOReplanFSM::odometryCallback, this);
 
-    bspline_pub_ = nh.advertise<ego_planner::Bspline>("/planning/bspline", 10);
-    data_disp_pub_ = nh.advertise<ego_planner::DataDisp>("/planning/data_display", 100);
+    std::string node_ns = nh.getNamespace();
+    std::string planner_ns = ros::names::parentNamespace(node_ns);
+    std::string bspline_topic = planner_ns + "/planning/bspline";
+    std::string data_disp_topic = planner_ns + "/planning/data_display";
+    if (planner_ns.empty() || planner_ns == "/")
+    {
+      bspline_topic = "/planning/bspline";
+      data_disp_topic = "/planning/data_display";
+    }
+
+    bspline_pub_ = nh.advertise<ego_planner::Bspline>(bspline_topic, 10);
+    data_disp_pub_ = nh.advertise<ego_planner::DataDisp>(data_disp_topic, 100);
 
     if (target_type_ == TARGET_TYPE::MANUAL_TARGET)
-      waypoint_sub_ = nh.subscribe("/waypoint_generator/waypoints", 1, &EGOReplanFSM::waypointCallback, this);
+    {
+      std::string waypoint_topic = planner_ns + "/waypoint_generator/waypoints";
+      if (planner_ns.empty() || planner_ns == "/")
+        waypoint_topic = "/waypoint_generator/waypoints";
+      waypoint_sub_ = nh.subscribe(waypoint_topic, 1, &EGOReplanFSM::waypointCallback, this);
+    }
     else if (target_type_ == TARGET_TYPE::PRESET_TARGET)
     {
       ros::Duration(1.0).sleep();
       while (ros::ok() && !have_odom_)
         ros::spinOnce();
+      if (wait_for_cloud_ready_)
+      {
+        ros::Rate wait_rate(20.0);
+        while (ros::ok())
+        {
+          have_cloud_ready_ = planner_manager_->grid_map_->hasCloudObservation();
+          if (have_cloud_ready_)
+            break;
+          ROS_WARN_THROTTLE(1.0, "waiting for cloud observation before preset trajectory start...");
+          ros::spinOnce();
+          wait_rate.sleep();
+        }
+      }
       planGlobalTrajbyGivenWps();
     }
     else
@@ -88,7 +122,7 @@ namespace ego_planner
 
     if (success)
     {
-
+      trigger_ = true;
       /*** display ***/
       constexpr double step_size_t = 0.1;
       int i_end = floor(planner_manager_->global_data_.global_duration_ / step_size_t);

@@ -88,10 +88,22 @@
     <param name="use_pos_fallback" value="false"/>
     <param name="steer_sign" value="1.0"/>
     <param name="k_yaw_damp" value="0.35"/>
-    <param name="allow_reverse_align" value="false"/>
-    <param name="reverse_yaw_thresh" value="1.45"/>
-    <param name="reverse_speed" value="0.12"/>
-    <param name="v_reverse_max" value="0.25"/>
+    <param name="allow_reverse_align" value="true"/>
+    <param name="reverse_yaw_thresh" value="1.40"/>
+    <param name="reverse_speed" value="0.18"/>
+    <param name="v_reverse_max" value="0.38"/>
+    <param name="reverse_track_enable" value="true"/>
+    <param name="reverse_track_min_dist" value="0.60"/>
+    <param name="reverse_track_max_dist" value="5.00"/>
+    <param name="reverse_track_enter_thresh" value="1.95"/>
+    <param name="reverse_track_exit_thresh" value="1.05"/>
+    <param name="reverse_heading_margin" value="0.25"/>
+    <param name="reverse_gain" value="0.42"/>
+    <param name="forward_turn_min_radius" value="1.15"/>
+    <param name="forward_turn_radius_margin" value="0.15"/>
+    <param name="forward_turn_lateral_deadband" value="0.18"/>
+    <param name="reverse_track_confirm_time" value="0.45"/>
+    <param name="reverse_track_front_confirm_dist" value="1.30"/>
     <param name="align_speed_cap" value="0.55"/>
     <param name="steer_max" value="1.35"/>
     <param name="min_drive_speed" value="0.10"/>

@@ -5,6 +5,7 @@
 import math
 import rospy
 import tf
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, PointCloud2
 from sensor_msgs import point_cloud2 as pc2
 
@@ -17,10 +18,28 @@ class ScanCloudWorld:
         self.max_points = int(rospy.get_param("~max_points", 720))
         self.use_inf_points = bool(rospy.get_param("~use_inf_points", False))
         self.range_max_margin = float(rospy.get_param("~range_max_margin", 0.08))
+        self.ignore_box_enable = bool(rospy.get_param("~ignore_box_enable", False))
+        self.ignore_box_center_x = float(rospy.get_param("~ignore_box_center_x", 0.0))
+        self.ignore_box_center_y = float(rospy.get_param("~ignore_box_center_y", 0.0))
+        self.ignore_box_center_z = float(rospy.get_param("~ignore_box_center_z", 1.0))
+        self.ignore_box_size_x = float(rospy.get_param("~ignore_box_size_x", 1.2))
+        self.ignore_box_size_y = float(rospy.get_param("~ignore_box_size_y", 1.2))
+        self.ignore_box_size_z = float(rospy.get_param("~ignore_box_size_z", 1.2))
+        self.ignore_odom_topic = rospy.get_param("~ignore_odom_topic", "")
+        self.ignore_odom_timeout = float(rospy.get_param("~ignore_odom_timeout", 0.5))
+        self.last_ignore_odom_time = rospy.Time(0)
         self.tf_listener = tf.TransformListener()
         self.publisher = rospy.Publisher(self.cloud_out, PointCloud2, queue_size=2)
         rospy.Subscriber(self.scan_in, LaserScan, self.scan_callback, queue_size=2)
+        if self.ignore_odom_topic:
+            rospy.Subscriber(self.ignore_odom_topic, Odometry, self.ignore_odom_callback, queue_size=5)
         rospy.loginfo("laserscan_cloud_world: %s -> %s", self.scan_in, self.cloud_out)
+
+    def ignore_odom_callback(self, msg):
+        self.ignore_box_center_x = msg.pose.pose.position.x
+        self.ignore_box_center_y = msg.pose.pose.position.y
+        self.ignore_box_center_z = msg.pose.pose.position.z
+        self.last_ignore_odom_time = rospy.Time.now()
 
     def scan_callback(self, scan_msg):
         source_frame = scan_msg.header.frame_id
@@ -61,6 +80,19 @@ class ScanCloudWorld:
             y = distance * math.sin(angle)
             z = 0.0
             mapped = transform.dot([x, y, z, 1.0])
+            ignore_box_active = self.ignore_box_enable
+            if ignore_box_active and self.ignore_odom_topic:
+                ignore_box_active = (
+                    self.last_ignore_odom_time != rospy.Time(0)
+                    and (rospy.Time.now() - self.last_ignore_odom_time).to_sec() <= self.ignore_odom_timeout
+                )
+            if ignore_box_active:
+                if (
+                    abs(mapped[0] - self.ignore_box_center_x) <= self.ignore_box_size_x * 0.5
+                    and abs(mapped[1] - self.ignore_box_center_y) <= self.ignore_box_size_y * 0.5
+                    and abs(mapped[2] - self.ignore_box_center_z) <= self.ignore_box_size_z * 0.5
+                ):
+                    continue
             world_points.append([mapped[0], mapped[1], mapped[2]])
 
         if not world_points:

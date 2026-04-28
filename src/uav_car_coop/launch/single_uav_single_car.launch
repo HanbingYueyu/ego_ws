@@ -1,49 +1,433 @@
 <launch>
   <arg name="vehicle" default="iris"/>
-  <arg name="uav_sdf" default="$(env HOME)/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris_velodyne/iris_velodyne.sdf"/>
+  <arg name="uav_sdf" default="$(env HOME)/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris/iris.sdf"/>
   <arg name="world_frame" default="world"/>
   <arg name="uav_odom_topic" default="/mavros/local_position/odom"/>
-  <arg name="uav_lidar_frame" default="velodyne_link"/>
-  <arg name="uav_lidar_z_offset" default="0.2"/>
+  <arg name="uav_base_frame" default="uav_base_link"/>
+  <arg name="uav_hover_z" default="1.0"/>
+  <arg name="follower_vehicle" default="iris"/>
+  <arg name="formation_spacing" default="4.0"/>
+  <arg name="field_start_x" default="-20.0"/>
+  <arg name="field_goal_x" default="20.0"/>
+  <arg name="field_goal_y" default="0.0"/>
+  <arg name="auto_start_goal" default="true"/>
 
   <arg name="car_model" default="top_akm_dl_robot"/>
   <arg name="car_urdf" default="$(find top_akm_dl_robot)/urdf/top_akm_dl_robot.urdf"/>
-  <arg name="car_spawn_x" default="3.0"/>
+  <arg name="car_spawn_x" default="-25.0"/>
   <arg name="car_spawn_y" default="0.0"/>
   <arg name="car_spawn_z" default="0.15"/>
   <arg name="car_spawn_yaw" default="0.0"/>
+  <arg name="car_goal_topic" default="/car/move_base_simple/goal"/>
+  <arg name="car_max_vel" default="1.50"/>
+  <arg name="car_max_acc" default="1.70"/>
+  <arg name="car_ctrl_v_max" default="1.35"/>
   <arg name="start_rviz" default="true"/>
   <arg name="rviz_config" default="$(find uav_car_coop)/rviz/coop_all_in_one.rviz"/>
   <arg name="publish_px4_map_tf" default="true"/>
 
-  <!-- PX4 SITL + UAV lidar pipeline -->
+  <!-- PX4 SITL + lightweight virtual local-sensing pipeline -->
   <include file="$(find px4)/launch/mavros_posix_sitl.launch">
     <arg name="vehicle" value="$(arg vehicle)"/>
     <arg name="sdf" value="$(arg uav_sdf)"/>
+    <arg name="x" value="$(arg field_start_x)"/>
+    <arg name="y" value="0.0"/>
+    <arg name="z" value="0.0"/>
+    <arg name="fcu_url" value="udp://:14540@localhost:14580"/>
   </include>
 
-  <node pkg="px4_ego_lidar" type="random_obstacles.py" name="uav_random_obstacles" output="screen"/>
+  <node pkg="px4_ego_lidar" type="random_obstacles.py" name="uav_random_obstacles" output="screen">
+    <param name="protected_x_min" value="$(eval float(arg('field_start_x')) - 7.0)"/>
+    <param name="protected_x_max" value="$(eval float(arg('field_start_x')) + 6.5)"/>
+    <param name="protected_y_min" value="$(eval -2.5 * float(arg('formation_spacing')))"/>
+    <param name="protected_y_max" value="$(eval 2.5 * float(arg('formation_spacing')))"/>
+    <param name="global_cloud_resolution" value="0.2"/>
+  </node>
 
-  <node pkg="uav_car_coop" type="uav_world_tf_bridge.py" name="uav_world_tf_bridge" output="screen">
+  <node pkg="uav_car_coop" type="world_odom_bridge.py" name="world_odom_bridge" output="screen">
+    <param name="odom_in" value="/mavros/local_position/odom"/>
+    <param name="odom_out" value="/world_odom"/>
+    <param name="world_offset_x" value="$(arg field_start_x)"/>
+    <param name="world_offset_y" value="0.0"/>
+    <param name="world_offset_z" value="0.0"/>
+  </node>
+
+  <node pkg="px4_ego_lidar" type="odom_to_tf.py" name="odom_to_tf" output="screen">
+    <param name="odom_topic" value="/mavros/local_position/odom"/>
     <param name="world_frame" value="$(arg world_frame)"/>
-    <param name="odom_topic" value="$(arg uav_odom_topic)"/>
-    <param name="drone_frame" value="uav_base_link"/>
-    <param name="lidar_frame" value="$(arg uav_lidar_frame)"/>
-    <param name="lidar_z_offset" value="$(arg uav_lidar_z_offset)"/>
-    <param name="publish_marker" value="true"/>
+    <param name="base_frame" value="$(arg uav_base_frame)"/>
+    <param name="marker_topic" value="/rviz_drone_marker"/>
+    <param name="world_offset_x" value="$(arg field_start_x)"/>
+    <param name="world_offset_y" value="0.0"/>
+    <param name="world_offset_z" value="0.0"/>
   </node>
 
-  <node pkg="px4_ego_lidar" type="velodyne_to_world.py" name="velodyne_to_world" output="screen">
-    <param name="target_frame" value="$(arg world_frame)"/>
-    <param name="cloud_in" value="/velodyne_points"/>
-    <param name="cloud_out" value="/velodyne_points_world"/>
+  <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+    <param name="sensing_horizon" value="8.0"/>
+    <param name="sensing_rate" value="20.0"/>
+    <param name="estimation_rate" value="20.0"/>
+    <param name="map/resolution" value="0.1"/>
+    <param name="map/x_size" value="120.0"/>
+    <param name="map/y_size" value="80.0"/>
+    <param name="map/z_size" value="6.0"/>
+    <remap from="~global_map" to="/map_generator/global_cloud"/>
+    <remap from="~odometry" to="/world_odom"/>
   </node>
 
-  <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen"/>
+  <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen">
+    <param name="hover_z" value="$(arg uav_hover_z)"/>
+    <param name="world_offset_x" value="$(arg field_start_x)"/>
+    <param name="world_offset_y" value="0.0"/>
+    <param name="world_offset_z" value="0.0"/>
+  </node>
+
+  <node pkg="uav_car_coop" type="formation_collision_cloud.py" name="formation_collision_cloud" output="screen">
+    <param name="safety_radius" value="1.60"/>
+    <param name="vertical_radius" value="0.75"/>
+    <param name="point_resolution" value="0.25"/>
+    <param name="publish_rate" value="10.0"/>
+    <param name="traj_sample_horizon" value="3.0"/>
+    <param name="traj_sample_dt" value="0.4"/>
+    <param name="traj_safety_radius" value="1.35"/>
+    <param name="traj_vertical_radius" value="0.65"/>
+    <param name="main_odom_topic" value="/world_odom"/>
+  </node>
+
+  <node pkg="uav_car_coop" type="formation_trajectory_viz.py" name="formation_trajectory_viz" output="screen">
+    <param name="line_width" value="0.09"/>
+    <param name="sample_dt" value="0.15"/>
+    <param name="publish_rate" value="8.0"/>
+  </node>
 
   <include file="$(find ego_planner)/launch/run_in_sim.launch">
-    <arg name="grid_map_cloud" value="/velodyne_points_world"/>
+    <arg name="odom_topic" value="/world_odom"/>
+    <arg name="grid_map_cloud" value="/planner_cloud"/>
   </include>
+
+  <node pkg="uav_car_coop" type="formation_goal_relay.py" name="formation_goal_relay" output="screen">
+    <param name="input_goal_topic" value="/move_base_simple/goal"/>
+    <param name="separation_enable" value="true"/>
+    <param name="separation_enter_distance" value="3.2"/>
+    <param name="separation_exit_distance" value="3.8"/>
+    <param name="separation_gain" value="1.15"/>
+    <param name="separation_max_bias" value="2.4"/>
+    <param name="separation_publish_rate" value="3.0"/>
+    <param name="main_odom_topic" value="/world_odom"/>
+    <param name="uav1_offset_x" value="0.0"/>
+    <param name="uav1_offset_y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>
+    <param name="uav1_offset_z" value="0.0"/>
+    <param name="uav2_offset_x" value="0.0"/>
+    <param name="uav2_offset_y" value="$(eval -1.0 * float(arg('formation_spacing')))"/>
+    <param name="uav2_offset_z" value="0.0"/>
+    <param name="uav3_offset_x" value="0.0"/>
+    <param name="uav3_offset_y" value="$(arg formation_spacing)"/>
+    <param name="uav3_offset_z" value="0.0"/>
+    <param name="uav4_offset_x" value="0.0"/>
+    <param name="uav4_offset_y" value="$(eval 2.0 * float(arg('formation_spacing')))"/>
+    <param name="uav4_offset_z" value="0.0"/>
+  </node>
+
+  <group ns="uav1">
+    <include file="$(find px4)/launch/single_vehicle_spawn.launch">
+      <arg name="x" value="$(arg field_start_x)"/>
+      <arg name="y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>
+      <arg name="z" value="0.0"/>
+      <arg name="R" value="0.0"/>
+      <arg name="P" value="0.0"/>
+      <arg name="Y" value="0.0"/>
+      <arg name="vehicle" value="$(arg follower_vehicle)"/>
+      <arg name="mavlink_udp_port" value="14561"/>
+      <arg name="mavlink_tcp_port" value="4561"/>
+      <arg name="ID" value="1"/>
+      <arg name="gst_udp_port" value="5601"/>
+      <arg name="video_uri" value="5601"/>
+      <arg name="mavlink_cam_udp_port" value="14531"/>
+    </include>
+
+    <include file="$(find mavros)/launch/px4.launch">
+      <arg name="fcu_url" value="udp://:14541@localhost:14581"/>
+      <arg name="gcs_url" value=""/>
+      <arg name="tgt_system" value="2"/>
+      <arg name="tgt_component" value="1"/>
+    </include>
+
+    <node pkg="uav_car_coop" type="world_odom_bridge.py" name="world_odom_bridge" output="screen">
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+      <param name="sensing_horizon" value="8.0"/>
+      <param name="sensing_rate" value="20.0"/>
+      <param name="estimation_rate" value="20.0"/>
+      <param name="map/resolution" value="0.1"/>
+      <param name="map/x_size" value="120.0"/>
+      <param name="map/y_size" value="80.0"/>
+      <param name="map/z_size" value="6.0"/>
+      <remap from="~global_map" to="/map_generator/global_cloud"/>
+      <remap from="~odometry" to="/uav1/world_odom"/>
+    </node>
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch">
+      <arg name="odom_topic" value="/uav1/world_odom"/>
+      <arg name="grid_map_cloud" value="/uav1/planner_cloud"/>
+      <arg name="goal_topic" value="/uav1/move_base_simple/goal"/>
+      <arg name="traj_start_trigger_topic" value="/uav1/traj_start_trigger"/>
+    </include>
+
+    <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen">
+      <param name="hover_z" value="$(arg uav_hover_z)"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="px4_ego_lidar" type="odom_to_tf.py" name="odom_to_tf" output="screen">
+      <param name="odom_topic" value="/uav1/mavros/local_position/odom"/>
+      <param name="world_frame" value="$(arg world_frame)"/>
+      <param name="base_frame" value="uav1_base_link"/>
+      <param name="marker_topic" value="/rviz_drone_marker_1"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+  </group>
+
+  <group ns="uav2">
+    <include file="$(find px4)/launch/single_vehicle_spawn.launch">
+      <arg name="x" value="$(arg field_start_x)"/>
+      <arg name="y" value="$(eval -1.0 * float(arg('formation_spacing')))"/>
+      <arg name="z" value="0.0"/>
+      <arg name="R" value="0.0"/>
+      <arg name="P" value="0.0"/>
+      <arg name="Y" value="0.0"/>
+      <arg name="vehicle" value="$(arg follower_vehicle)"/>
+      <arg name="mavlink_udp_port" value="14562"/>
+      <arg name="mavlink_tcp_port" value="4562"/>
+      <arg name="ID" value="2"/>
+      <arg name="gst_udp_port" value="5602"/>
+      <arg name="video_uri" value="5602"/>
+      <arg name="mavlink_cam_udp_port" value="14532"/>
+    </include>
+
+    <include file="$(find mavros)/launch/px4.launch">
+      <arg name="fcu_url" value="udp://:14542@localhost:14582"/>
+      <arg name="gcs_url" value=""/>
+      <arg name="tgt_system" value="3"/>
+      <arg name="tgt_component" value="1"/>
+    </include>
+
+    <node pkg="uav_car_coop" type="world_odom_bridge.py" name="world_odom_bridge" output="screen">
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval -1.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+      <param name="sensing_horizon" value="8.0"/>
+      <param name="sensing_rate" value="20.0"/>
+      <param name="estimation_rate" value="20.0"/>
+      <param name="map/resolution" value="0.1"/>
+      <param name="map/x_size" value="120.0"/>
+      <param name="map/y_size" value="80.0"/>
+      <param name="map/z_size" value="6.0"/>
+      <remap from="~global_map" to="/map_generator/global_cloud"/>
+      <remap from="~odometry" to="/uav2/world_odom"/>
+    </node>
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch">
+      <arg name="odom_topic" value="/uav2/world_odom"/>
+      <arg name="grid_map_cloud" value="/uav2/planner_cloud"/>
+      <arg name="goal_topic" value="/uav2/move_base_simple/goal"/>
+      <arg name="traj_start_trigger_topic" value="/uav2/traj_start_trigger"/>
+    </include>
+
+    <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen">
+      <param name="hover_z" value="$(arg uav_hover_z)"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval -1.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="px4_ego_lidar" type="odom_to_tf.py" name="odom_to_tf" output="screen">
+      <param name="odom_topic" value="/uav2/mavros/local_position/odom"/>
+      <param name="world_frame" value="$(arg world_frame)"/>
+      <param name="base_frame" value="uav2_base_link"/>
+      <param name="marker_topic" value="/rviz_drone_marker_2"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval -1.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+  </group>
+
+  <group ns="uav3">
+    <include file="$(find px4)/launch/single_vehicle_spawn.launch">
+      <arg name="x" value="$(arg field_start_x)"/>
+      <arg name="y" value="$(arg formation_spacing)"/>
+      <arg name="z" value="0.0"/>
+      <arg name="R" value="0.0"/>
+      <arg name="P" value="0.0"/>
+      <arg name="Y" value="0.0"/>
+      <arg name="vehicle" value="$(arg follower_vehicle)"/>
+      <arg name="mavlink_udp_port" value="14563"/>
+      <arg name="mavlink_tcp_port" value="4563"/>
+      <arg name="ID" value="3"/>
+      <arg name="gst_udp_port" value="5603"/>
+      <arg name="video_uri" value="5603"/>
+      <arg name="mavlink_cam_udp_port" value="14533"/>
+    </include>
+
+    <include file="$(find mavros)/launch/px4.launch">
+      <arg name="fcu_url" value="udp://:14543@localhost:14583"/>
+      <arg name="gcs_url" value=""/>
+      <arg name="tgt_system" value="4"/>
+      <arg name="tgt_component" value="1"/>
+    </include>
+
+    <node pkg="uav_car_coop" type="world_odom_bridge.py" name="world_odom_bridge" output="screen">
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(arg formation_spacing)"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+      <param name="sensing_horizon" value="8.0"/>
+      <param name="sensing_rate" value="20.0"/>
+      <param name="estimation_rate" value="20.0"/>
+      <param name="map/resolution" value="0.1"/>
+      <param name="map/x_size" value="120.0"/>
+      <param name="map/y_size" value="80.0"/>
+      <param name="map/z_size" value="6.0"/>
+      <remap from="~global_map" to="/map_generator/global_cloud"/>
+      <remap from="~odometry" to="/uav3/world_odom"/>
+    </node>
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch">
+      <arg name="odom_topic" value="/uav3/world_odom"/>
+      <arg name="grid_map_cloud" value="/uav3/planner_cloud"/>
+      <arg name="goal_topic" value="/uav3/move_base_simple/goal"/>
+      <arg name="traj_start_trigger_topic" value="/uav3/traj_start_trigger"/>
+    </include>
+
+    <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen">
+      <param name="hover_z" value="$(arg uav_hover_z)"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(arg formation_spacing)"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="px4_ego_lidar" type="odom_to_tf.py" name="odom_to_tf" output="screen">
+      <param name="odom_topic" value="/uav3/mavros/local_position/odom"/>
+      <param name="world_frame" value="$(arg world_frame)"/>
+      <param name="base_frame" value="uav3_base_link"/>
+      <param name="marker_topic" value="/rviz_drone_marker_3"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(arg formation_spacing)"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+  </group>
+
+  <group ns="uav4">
+    <include file="$(find px4)/launch/single_vehicle_spawn.launch">
+      <arg name="x" value="$(arg field_start_x)"/>
+      <arg name="y" value="$(eval 2.0 * float(arg('formation_spacing')))"/>
+      <arg name="z" value="0.0"/>
+      <arg name="R" value="0.0"/>
+      <arg name="P" value="0.0"/>
+      <arg name="Y" value="0.0"/>
+      <arg name="vehicle" value="$(arg follower_vehicle)"/>
+      <arg name="mavlink_udp_port" value="14564"/>
+      <arg name="mavlink_tcp_port" value="4564"/>
+      <arg name="ID" value="4"/>
+      <arg name="gst_udp_port" value="5604"/>
+      <arg name="video_uri" value="5604"/>
+      <arg name="mavlink_cam_udp_port" value="14534"/>
+    </include>
+
+    <include file="$(find mavros)/launch/px4.launch">
+      <arg name="fcu_url" value="udp://:14544@localhost:14584"/>
+      <arg name="gcs_url" value=""/>
+      <arg name="tgt_system" value="5"/>
+      <arg name="tgt_component" value="1"/>
+    </include>
+
+    <node pkg="uav_car_coop" type="world_odom_bridge.py" name="world_odom_bridge" output="screen">
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval 2.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="local_sensing_node" type="pcl_render_node" name="pcl_render_node" output="screen">
+      <param name="sensing_horizon" value="8.0"/>
+      <param name="sensing_rate" value="20.0"/>
+      <param name="estimation_rate" value="20.0"/>
+      <param name="map/resolution" value="0.1"/>
+      <param name="map/x_size" value="120.0"/>
+      <param name="map/y_size" value="80.0"/>
+      <param name="map/z_size" value="6.0"/>
+      <remap from="~global_map" to="/map_generator/global_cloud"/>
+      <remap from="~odometry" to="/uav4/world_odom"/>
+    </node>
+
+    <include file="$(find ego_planner)/launch/run_in_sim.launch">
+      <arg name="odom_topic" value="/uav4/world_odom"/>
+      <arg name="grid_map_cloud" value="/uav4/planner_cloud"/>
+      <arg name="goal_topic" value="/uav4/move_base_simple/goal"/>
+      <arg name="traj_start_trigger_topic" value="/uav4/traj_start_trigger"/>
+    </include>
+
+    <node pkg="px4_ego_lidar" type="px4_controller.py" name="px4_controller" output="screen">
+      <param name="hover_z" value="$(arg uav_hover_z)"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval 2.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+
+    <node pkg="px4_ego_lidar" type="odom_to_tf.py" name="odom_to_tf" output="screen">
+      <param name="odom_topic" value="/uav4/mavros/local_position/odom"/>
+      <param name="world_frame" value="$(arg world_frame)"/>
+      <param name="base_frame" value="uav4_base_link"/>
+      <param name="marker_topic" value="/rviz_drone_marker_4"/>
+      <param name="world_offset_x" value="$(arg field_start_x)"/>
+      <param name="world_offset_y" value="$(eval 2.0 * float(arg('formation_spacing')))"/>
+      <param name="world_offset_z" value="0.0"/>
+    </node>
+  </group>
+
+  <group ns="car">
+    <include file="$(find ego_planner)/launch/run_in_ackermann_sim.launch">
+      <arg name="odom_topic" value="/odom"/>
+      <arg name="grid_map_cloud" value="/scan_cloud_world"/>
+      <arg name="position_cmd_topic" value="planning/pos_cmd"/>
+      <arg name="waypoint_goal_topic" value="$(arg car_goal_topic)"/>
+      <arg name="traj_start_trigger_topic" value="/car_traj_start_trigger"/>
+      <arg name="wait_for_cloud_ready" value="false"/>
+      <arg name="max_vel" value="$(arg car_max_vel)"/>
+      <arg name="max_acc" value="$(arg car_max_acc)"/>
+      <arg name="planner_horizon" value="8.5"/>
+      <arg name="odom_sync_err_thresh" value="0.60"/>
+      <arg name="periodic_sync_interval" value="1.20"/>
+      <arg name="global_reanchor_dist_thresh" value="0.90"/>
+      <arg name="flight_type" value="1"/>
+      <arg name="point_num" value="5"/>
+      <arg name="point0_x" value="12.0"/>
+      <arg name="point0_y" value="0.0"/>
+      <arg name="point0_z" value="0.0"/>
+      <arg name="point1_x" value="0.0"/>
+      <arg name="point1_y" value="12.0"/>
+      <arg name="point1_z" value="0.0"/>
+      <arg name="point2_x" value="-12.0"/>
+      <arg name="point2_y" value="0.0"/>
+      <arg name="point2_z" value="0.0"/>
+      <arg name="point3_x" value="0.0"/>
+      <arg name="point3_y" value="-12.0"/>
+      <arg name="point3_z" value="0.0"/>
+      <arg name="point4_x" value="12.0"/>
+      <arg name="point4_y" value="0.0"/>
+      <arg name="point4_z" value="0.0"/>
+    </include>
+  </group>
 
   <!-- Car model + car-side perception/control in the same Gazebo world -->
   <param name="robot_description" textfile="$(arg car_urdf)"/>
@@ -83,35 +467,63 @@
     <param name="target_frame" value="$(arg world_frame)"/>
     <param name="use_inf_points" value="false"/>
     <param name="range_max_margin" value="0.08"/>
+    <param name="ignore_box_enable" value="true"/>
+    <param name="ignore_box_center_z" value="$(arg uav_hover_z)"/>
+    <param name="ignore_box_size_x" value="1.6"/>
+    <param name="ignore_box_size_y" value="1.6"/>
+    <param name="ignore_box_size_z" value="1.8"/>
+    <param name="ignore_odom_topic" value="/world_odom"/>
+    <param name="ignore_odom_timeout" value="0.6"/>
   </node>
 
   <node name="ego_car_controller" pkg="ros_gazebo_obstacle_car" type="ego_car_controller.py" output="screen">
-    <param name="v_max" value="0.85"/>
-    <param name="k_pos" value="0.55"/>
+    <param name="v_max" value="$(arg car_ctrl_v_max)"/>
+    <param name="k_pos" value="0.62"/>
     <param name="k_w" value="1.8"/>
     <param name="k_w_fast_turn" value="2.2"/>
-    <param name="use_pos_fallback" value="true"/>
+    <param name="use_pos_fallback" value="false"/>
+    <param name="odom_topic" value="/odom"/>
+    <param name="cmd_topic" value="/car/planning/pos_cmd"/>
+    <param name="goal_topic" value="$(arg car_goal_topic)"/>
+    <param name="scan_topic" value="/scan"/>
     <param name="steer_sign" value="1.0"/>
     <param name="k_yaw_damp" value="0.35"/>
-    <param name="allow_reverse_align" value="false"/>
-    <param name="reverse_yaw_thresh" value="1.45"/>
-    <param name="reverse_speed" value="0.12"/>
-    <param name="v_reverse_max" value="0.25"/>
-    <param name="align_speed_cap" value="0.55"/>
+    <param name="allow_reverse_align" value="true"/>
+    <param name="reverse_yaw_thresh" value="1.40"/>
+    <param name="reverse_speed" value="0.18"/>
+    <param name="v_reverse_max" value="0.38"/>
+    <param name="reverse_track_enable" value="true"/>
+    <param name="reverse_track_min_dist" value="0.60"/>
+    <param name="reverse_track_max_dist" value="5.00"/>
+    <param name="reverse_track_enter_thresh" value="1.95"/>
+    <param name="reverse_track_exit_thresh" value="1.05"/>
+    <param name="reverse_heading_margin" value="0.25"/>
+    <param name="reverse_gain" value="0.42"/>
+    <param name="forward_turn_min_radius" value="1.15"/>
+    <param name="forward_turn_radius_margin" value="0.15"/>
+    <param name="forward_turn_lateral_deadband" value="0.18"/>
+    <param name="reverse_track_confirm_time" value="0.45"/>
+    <param name="reverse_track_front_confirm_dist" value="1.30"/>
+    <param name="align_speed_cap" value="0.70"/>
     <param name="steer_max" value="1.35"/>
     <param name="min_drive_speed" value="0.10"/>
     <param name="min_align_speed" value="0.06"/>
     <param name="align_steer_max" value="0.70"/>
     <param name="yaw_deadband" value="0.05"/>
-    <param name="goal_tolerance" value="0.35"/>
+    <param name="goal_tolerance" value="0.50"/>
     <param name="yaw_slow_thresh" value="0.85"/>
     <param name="turn_in_place_thresh" value="1.10"/>
     <param name="vel_heading_thresh" value="0.08"/>
-    <param name="lookahead_time" value="0.45"/>
+    <param name="lookahead_time" value="0.60"/>
     <param name="motion_yaw_min_speed" value="0.04"/>
     <param name="yaw_ref_rate_limit" value="1.2"/>
     <param name="steer_rate_limit" value="2.2"/>
     <param name="hard_brake_yaw_thresh" value="1.7"/>
+    <param name="turn_to_goal_enable" value="true"/>
+    <param name="turn_to_goal_enter_deg" value="130.0"/>
+    <param name="turn_to_goal_exit_deg" value="20.0"/>
+    <param name="turn_to_goal_speed" value="0.10"/>
+    <param name="turn_to_goal_yaw_rate_max" value="0.85"/>
     <param name="safety_enable" value="true"/>
     <param name="safety_stop_dist" value="1.05"/>
     <param name="safety_slow_dist" value="2.20"/>
@@ -119,6 +531,19 @@
     <param name="safety_scan_timeout" value="0.35"/>
     <param name="safety_front_half_angle_deg" value="35.0"/>
     <param name="safety_side_angle_deg" value="75.0"/>
+  </node>
+
+  <node pkg="uav_car_coop" type="start_line_mission.py" name="start_line_mission" output="screen">
+    <param name="enabled" value="$(arg auto_start_goal)"/>
+    <param name="uav_goal_topic" value="/move_base_simple/goal"/>
+    <param name="car_goal_topic" value="$(arg car_goal_topic)"/>
+    <param name="goal_x" value="$(arg field_goal_x)"/>
+    <param name="goal_y" value="$(arg field_goal_y)"/>
+    <param name="uav_goal_z" value="$(arg uav_hover_z)"/>
+    <param name="car_goal_z" value="0.0"/>
+    <param name="min_takeoff_z" value="0.75"/>
+    <param name="ready_hold_time" value="2.0"/>
+    <param name="max_wait_time" value="90.0"/>
   </node>
 
     <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="rviz_global"

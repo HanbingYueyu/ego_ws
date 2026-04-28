@@ -18,15 +18,67 @@ Visualization Manager:
       Name: UavAvatar
       Marker Topic: /rviz_drone_marker
       Value: true
+    - Class: rviz/Marker
+      Name: UavFollower1
+      Marker Topic: /rviz_drone_marker_1
+      Value: true
+    - Class: rviz/Marker
+      Name: UavFollower2
+      Marker Topic: /rviz_drone_marker_2
+      Value: true
+    - Class: rviz/Marker
+      Name: UavFollower3
+      Marker Topic: /rviz_drone_marker_3
+      Value: true
+    - Class: rviz/Marker
+      Name: UavFollower4
+      Marker Topic: /rviz_drone_marker_4
+      Value: true
     - Class: rviz/PointCloud2
-      Name: UavVelodyneWorld
-      Topic: /velodyne_points_world
+      Name: MainPlannerCloud
+      Topic: /planner_cloud
       Color Transformer: FlatColor
       Color: 0; 160; 255
       Alpha: 1
       Style: Flat Squares
       Size (Pixels): 2
       Value: true
+    - Class: rviz/PointCloud2
+      Name: Uav1PlannerCloud
+      Topic: /uav1/planner_cloud
+      Color Transformer: FlatColor
+      Color: 255; 160; 0
+      Alpha: 0.45
+      Style: Flat Squares
+      Size (Pixels): 2
+      Value: false
+    - Class: rviz/PointCloud2
+      Name: Uav2PlannerCloud
+      Topic: /uav2/planner_cloud
+      Color Transformer: FlatColor
+      Color: 180; 80; 255
+      Alpha: 0.45
+      Style: Flat Squares
+      Size (Pixels): 2
+      Value: false
+    - Class: rviz/PointCloud2
+      Name: Uav3PlannerCloud
+      Topic: /uav3/planner_cloud
+      Color Transformer: FlatColor
+      Color: 0; 220; 120
+      Alpha: 0.45
+      Style: Flat Squares
+      Size (Pixels): 2
+      Value: false
+    - Class: rviz/PointCloud2
+      Name: Uav4PlannerCloud
+      Topic: /uav4/planner_cloud
+      Color Transformer: FlatColor
+      Color: 255; 80; 100
+      Alpha: 0.45
+      Style: Flat Squares
+      Size (Pixels): 2
+      Value: false
     - Class: rviz/PointCloud2
       Name: CarScanCloudWorld
       Topic: /scan_cloud_world
@@ -50,8 +102,28 @@ Visualization Manager:
       Marker Topic: /ego_planner_node/init_list
       Value: true
     - Class: rviz/Marker
-      Name: EGO_Optimal_Traj
+      Name: Main_EGO_Optimal_Traj
       Marker Topic: /ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Uav1_EGO_Optimal_Traj
+      Marker Topic: /uav1/ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Uav2_EGO_Optimal_Traj
+      Marker Topic: /uav2/ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Uav3_EGO_Optimal_Traj
+      Marker Topic: /uav3/ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Uav4_EGO_Optimal_Traj
+      Marker Topic: /uav4/ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/MarkerArray
+      Name: Formation_Trajectory_Colors
+      Marker Topic: /formation/trajectory_markers
       Value: true
     - Class: rviz/Marker
       Name: EGO_AStar_Path

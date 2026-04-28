@@ -11,11 +11,15 @@
 
   <depend>rospy</depend>
   <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>tf</depend>
   <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>
 
   <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>mavros</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rviz</exec_depend>
 

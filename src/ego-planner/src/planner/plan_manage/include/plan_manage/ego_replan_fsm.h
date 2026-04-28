@@ -62,9 +62,10 @@ namespace ego_planner
     double periodic_odom_sync_interval_;
     bool reanchor_global_traj_on_detour_;
     double global_reanchor_dist_thresh_;
+    bool wait_for_cloud_ready_;
 
     /* planning data */
-    bool trigger_, have_target_, have_odom_, have_new_target_;
+    bool trigger_, have_target_, have_odom_, have_new_target_, have_cloud_ready_;
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
     ros::Time last_periodic_odom_sync_time_;

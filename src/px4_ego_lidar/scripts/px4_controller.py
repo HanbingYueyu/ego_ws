@@ -8,6 +8,10 @@ from quadrotor_msgs.msg import PositionCommand
 
 current_state = State()
 target_msg = PositionTarget()
+world_offset_x = 0.0
+world_offset_y = 0.0
+world_offset_z = 0.0
+hover_z = 1.0
 
 # 回调函数：记录飞控当前状态
 def state_cb(msg):
@@ -19,17 +23,25 @@ def cmd_cb(msg):
     global target_msg
     target_msg.header.stamp = rospy.Time.now()
     target_msg.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
-    # 忽略速度和加速度，只使用纯位置控制
-    target_msg.type_mask = PositionTarget.IGNORE_VX | PositionTarget.IGNORE_VY | PositionTarget.IGNORE_VZ | \
-                           PositionTarget.IGNORE_AFX | PositionTarget.IGNORE_AFY | PositionTarget.IGNORE_AFZ | \
+    # Keep velocity feed-forward so PX4 tracks the planned path more conservatively
+    # around obstacles instead of cutting corners toward sparse position setpoints.
+    target_msg.type_mask = PositionTarget.IGNORE_AFX | PositionTarget.IGNORE_AFY | PositionTarget.IGNORE_AFZ | \
                            PositionTarget.IGNORE_YAW_RATE
-    target_msg.position.x = msg.position.x
-    target_msg.position.y = msg.position.y
-    target_msg.position.z = msg.position.z
+    target_msg.position.x = msg.position.x - world_offset_x
+    target_msg.position.y = msg.position.y - world_offset_y
+    target_msg.position.z = msg.position.z - world_offset_z
+    target_msg.velocity.x = msg.velocity.x
+    target_msg.velocity.y = msg.velocity.y
+    target_msg.velocity.z = msg.velocity.z
     target_msg.yaw = msg.yaw
 
 def main():
+    global world_offset_x, world_offset_y, world_offset_z, hover_z
     rospy.init_node('px4_traj_controller')
+    world_offset_x = float(rospy.get_param("~world_offset_x", 0.0))
+    world_offset_y = float(rospy.get_param("~world_offset_y", 0.0))
+    world_offset_z = float(rospy.get_param("~world_offset_z", 0.0))
+    hover_z = float(rospy.get_param("~hover_z", 1.0))
 
     # 订阅飞控状态和 EGO 算法指令，发布底层控制指令
     rospy.Subscriber("mavros/state", State, state_cb)
@@ -59,7 +71,7 @@ def main():
                            PositionTarget.IGNORE_YAW_RATE
     target_msg.position.x = 0.0
     target_msg.position.y = 0.0
-    target_msg.position.z = 1.0
+    target_msg.position.z = hover_z
     target_msg.yaw = 0.0
 
     # 在请求 Offboard 模式前，必须先发一阵子目标点 (这是 PX4 飞控的安全强制要求)

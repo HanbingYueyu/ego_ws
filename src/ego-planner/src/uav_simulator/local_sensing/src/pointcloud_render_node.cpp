@@ -175,8 +175,7 @@ int main(int argc, char** argv) {
   odom_sub = nh.subscribe("odometry", 50, rcvOdometryCallbck);
 
   // publisher depth image and color image
-  pub_cloud =
-      nh.advertise<sensor_msgs::PointCloud2>("/pcl_render_node/cloud", 10);
+  pub_cloud = nh.advertise<sensor_msgs::PointCloud2>("cloud", 10);
 
   double sensing_duration = 1.0 / sensing_rate * 2.5;
 
