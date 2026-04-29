@@ -129,6 +129,22 @@ Visualization Manager:
       Name: EGO_AStar_Path
       Marker Topic: /ego_planner_node/a_star_list
       Value: true
+    - Class: rviz/Marker
+      Name: Car_EGO_Global_Path
+      Marker Topic: /car/ego_planner_node/global_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Car_EGO_Init_Path
+      Marker Topic: /car/ego_planner_node/init_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Car_EGO_Optimal_Traj
+      Marker Topic: /car/ego_planner_node/optimal_list
+      Value: true
+    - Class: rviz/Marker
+      Name: Car_EGO_AStar_Path
+      Marker Topic: /car/ego_planner_node/a_star_list
+      Value: true
   Global Options:
     Fixed Frame: world
   Tools:

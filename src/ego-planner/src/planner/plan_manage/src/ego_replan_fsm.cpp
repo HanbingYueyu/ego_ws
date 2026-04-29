@@ -186,12 +186,18 @@ namespace ego_planner
       end_vel_.setZero();
       have_target_ = true;
       have_new_target_ = true;
+      last_periodic_odom_sync_time_ = ros::Time(0);
+      flag_escape_emergency_ = false;
 
       /*** FSM ***/
-      if (exec_state_ == WAIT_TARGET)
-        changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
-      else if (exec_state_ == EXEC_TRAJ)
+      if (exec_state_ == EXEC_TRAJ)
+      {
         changeFSMExecState(REPLAN_TRAJ, "TRIG");
+      }
+      else
+      {
+        changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
+      }
 
       // visualization_->displayGoalPoint(end_pt_, Eigen::Vector4d(1, 0, 0, 1), 0.3, 0);
       visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
@@ -520,6 +526,23 @@ namespace ego_planner
 
     getLocalTarget();
 
+    if ((local_target_pt_ - start_pt_).norm() < 0.2)
+    {
+      const Eigen::Vector3d to_goal = end_pt_ - start_pt_;
+      if (to_goal.norm() < goal_reach_odom_thresh_)
+      {
+        ROS_WARN_THROTTLE(0.5, "[FSM] final target is reached; publishing hold trajectory.");
+        have_new_target_ = false;
+        return callEmergencyStop(start_pt_);
+      }
+
+      const double target_dist = std::min(planning_horizen_, to_goal.norm());
+      local_target_pt_ = start_pt_ + to_goal.normalized() * target_dist;
+      local_target_vel_ = Eigen::Vector3d::Zero();
+      planner_manager_->global_data_.last_progress_time_ = 0.0;
+      ROS_WARN_THROTTLE(0.5, "[FSM] local target was too close while final goal is far; pushing local target forward.");
+    }
+
     bool plan_success =
         planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
     have_new_target_ = false;
@@ -606,30 +629,51 @@ namespace ego_planner
     double t_step = planning_horizen_ / 20 / planner_manager_->pp_.max_vel_;
     t_step = std::max(0.02, t_step);
 
-    if (reanchor_global_traj_on_detour_)
+    double nearest_global_dist = 1e9;
+    double nearest_global_t = 0.0;
+    for (double tt = 0.0; tt <= planner_manager_->global_data_.global_duration_ + 1e-3; tt += t_step)
     {
-      double dist_to_global_min = 1e9;
-      for (double tt = planner_manager_->global_data_.last_progress_time_; tt < planner_manager_->global_data_.global_duration_; tt += t_step)
+      const Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(tt);
+      const double dist = (pos_t - start_pt_).norm();
+      if (dist < nearest_global_dist)
       {
-        const Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(tt);
-        dist_to_global_min = std::min(dist_to_global_min, (pos_t - start_pt_).norm());
+        nearest_global_dist = dist;
+        nearest_global_t = tt;
       }
+    }
 
-      if (dist_to_global_min > global_reanchor_dist_thresh_)
+    if (reanchor_global_traj_on_detour_ && nearest_global_dist > global_reanchor_dist_thresh_)
+    {
+      const bool reanchor_success = planner_manager_->planGlobalTraj(
+          start_pt_, start_vel_, Eigen::Vector3d::Zero(),
+          end_pt_, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
+
+      if (reanchor_success)
       {
-        const bool reanchor_success = planner_manager_->planGlobalTraj(
-            start_pt_, start_vel_, Eigen::Vector3d::Zero(),
-            end_pt_, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
-
-        if (reanchor_success)
-        {
-          ROS_WARN_THROTTLE(0.5, "[FSM] Re-anchor global traj: detour=%.3f m > %.3f m", dist_to_global_min, global_reanchor_dist_thresh_);
-        }
-        else
-        {
-          ROS_WARN_THROTTLE(0.5, "[FSM] Global re-anchor failed, keep current global traj.");
-        }
+        planner_manager_->global_data_.last_progress_time_ = 0.0;
+        nearest_global_t = 0.0;
+        ROS_WARN_THROTTLE(0.5, "[FSM] Re-anchor global traj: detour=%.3f m > %.3f m", nearest_global_dist, global_reanchor_dist_thresh_);
       }
+      else
+      {
+        ROS_WARN_THROTTLE(0.5, "[FSM] Global re-anchor failed; aiming directly at final goal.");
+        local_target_pt_ = end_pt_;
+        local_target_vel_ = Eigen::Vector3d::Zero();
+        planner_manager_->global_data_.last_progress_time_ = 0.0;
+        return;
+      }
+    }
+    else if (planner_manager_->global_data_.last_progress_time_ > nearest_global_t + t_step)
+    {
+      ROS_WARN_THROTTLE(0.5, "[FSM] global progress was ahead of odom; rewinding progress time.");
+      planner_manager_->global_data_.last_progress_time_ = nearest_global_t;
+    }
+
+    const Eigen::Vector3d progress_pos = planner_manager_->global_data_.getPosition(planner_manager_->global_data_.last_progress_time_);
+    if ((progress_pos - start_pt_).norm() > planning_horizen_)
+    {
+      ROS_WARN_THROTTLE(0.5, "[FSM] global progress lost track of odom; resetting to nearest global point.");
+      planner_manager_->global_data_.last_progress_time_ = nearest_global_t;
     }
 
     double dist_min = 9999, dist_min_t = 0.0;
@@ -637,17 +681,6 @@ namespace ego_planner
     {
       Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(t);
       double dist = (pos_t - start_pt_).norm();
-
-      if (t < planner_manager_->global_data_.last_progress_time_ + 1e-5 && dist > planning_horizen_)
-      {
-        // todo
-        ROS_ERROR("last_progress_time_ ERROR !!!!!!!!!");
-        ROS_ERROR("last_progress_time_ ERROR !!!!!!!!!");
-        ROS_ERROR("last_progress_time_ ERROR !!!!!!!!!");
-        ROS_ERROR("last_progress_time_ ERROR !!!!!!!!!");
-        ROS_ERROR("last_progress_time_ ERROR !!!!!!!!!");
-        return;
-      }
       if (dist < dist_min)
       {
         dist_min = dist;

@@ -72,6 +72,8 @@ class EgoCarController:
         self.safety_stop_dist = rospy.get_param("~safety_stop_dist", 1.05)
         self.safety_slow_dist = rospy.get_param("~safety_slow_dist", 2.2)
         self.safety_turn_rate = rospy.get_param("~safety_turn_rate", 0.95)
+        self.safety_escape_reverse = rospy.get_param("~safety_escape_reverse", True)
+        self.safety_escape_reverse_speed = rospy.get_param("~safety_escape_reverse_speed", self.reverse_speed)
         self.safety_scan_timeout = rospy.get_param("~safety_scan_timeout", 0.35)
         self.safety_front_half_angle_deg = rospy.get_param("~safety_front_half_angle_deg", 35.0)
         self.safety_side_angle_deg = rospy.get_param("~safety_side_angle_deg", 75.0)
@@ -188,6 +190,7 @@ class EgoCarController:
             now = rospy.Time.now()
             cmd = self.last_cmd
             if cmd is None or (now - self.last_cmd_time).to_sec() > self.cmd_timeout:
+                rospy.logwarn_throttle(1.0, "car controller waiting for fresh planner command")
                 twist.linear.x = 0.0
                 twist.angular.z = 0.0
                 self.last_yaw_rate_cmd = 0.0
@@ -200,9 +203,32 @@ class EgoCarController:
             dx = cmd.position.x - self.x
             dy = cmd.position.y - self.y
             dist = math.sqrt(dx * dx + dy * dy)
+            v_ff = math.sqrt(vx * vx + vy * vy)
+
+            target_x = cmd.position.x
+            target_y = cmd.position.y
+            goal_fallback_active = False
+            if (
+                self.use_pos_fallback
+                and v_ff < 0.05
+                and dist < self.goal_tolerance
+                and self.last_goal is not None
+                and (now - self.last_goal_time).to_sec() <= 20.0
+            ):
+                goal_dx = self.last_goal.pose.position.x - self.x
+                goal_dy = self.last_goal.pose.position.y - self.y
+                goal_dist_for_fallback = math.hypot(goal_dx, goal_dy)
+                if goal_dist_for_fallback > self.goal_tolerance:
+                    dx = goal_dx
+                    dy = goal_dy
+                    dist = goal_dist_for_fallback
+                    target_x = self.last_goal.pose.position.x
+                    target_y = self.last_goal.pose.position.y
+                    goal_fallback_active = True
+                    rospy.logwarn_throttle(1.0, "planner command is holding but car goal is still far; using goal fallback")
+
             x_body, y_body = self.target_in_body_frame(dx, dy)
 
-            v_ff = math.sqrt(vx * vx + vy * vy)
             if v_ff > 0.05:
                 v_ref = v_ff
             else:
@@ -217,9 +243,9 @@ class EgoCarController:
                 v_ref = 0.0
 
             # Use a lookahead target to make heading robust to local trajectory jitter.
-            tx = cmd.position.x
-            ty = cmd.position.y
-            if v_ff > self.vel_heading_thresh:
+            tx = target_x
+            ty = target_y
+            if v_ff > self.vel_heading_thresh and not goal_fallback_active:
                 tx += self.lookahead_time * vx
                 ty += self.lookahead_time * vy
 
@@ -354,9 +380,17 @@ class EgoCarController:
                 front = self.front_min_dist
                 if math.isfinite(front):
                     if front < self.safety_stop_dist:
-                        safety_phase = "stop_turn"
                         turn_sign = 1.0 if self.left_mean_dist >= self.right_mean_dist else -1.0
-                        v_ref = min(v_ref, 0.0)
+                        if self.safety_escape_reverse and self.allow_reverse_align and goal_dist > self.goal_tolerance:
+                            safety_phase = "reverse_escape"
+                            v_ref = -min(
+                                self.v_reverse_max,
+                                max(self.min_align_speed, self.safety_escape_reverse_speed),
+                            )
+                            self.reverse_track_active = True
+                        else:
+                            safety_phase = "stop_turn"
+                            v_ref = min(v_ref, 0.0)
                         yaw_rate_cmd = turn_sign * max(abs(yaw_rate_cmd), self.safety_turn_rate)
                     elif front < self.safety_slow_dist:
                         safety_phase = "slow"
