@@ -20,6 +20,7 @@ class FormationGoalRelay:
         self.separation_gain = float(rospy.get_param("~separation_gain", 1.15))
         self.separation_max_bias = float(rospy.get_param("~separation_max_bias", 2.4))
         self.separation_publish_rate = float(rospy.get_param("~separation_publish_rate", 3.0))
+        self.nominal_publish_rate = float(rospy.get_param("~nominal_publish_rate", 0.0))
         self.odom_timeout = float(rospy.get_param("~odom_timeout", 1.2))
 
         self.last_goal = None
@@ -62,6 +63,9 @@ class FormationGoalRelay:
         if self.separation_enable:
             period = 1.0 / max(0.1, self.separation_publish_rate)
             rospy.Timer(rospy.Duration(period), self.separation_timer_cb)
+        if self.nominal_publish_rate > 0.0:
+            period = 1.0 / max(0.05, self.nominal_publish_rate)
+            rospy.Timer(rospy.Duration(period), self.nominal_timer_cb)
 
     def goal_cb(self, msg):
         self.last_goal = copy.deepcopy(msg)
@@ -197,6 +201,11 @@ class FormationGoalRelay:
         elif was_active:
             self.publish_followers()
             rospy.loginfo("formation separation clear: restored nominal formation goals")
+
+    def nominal_timer_cb(self, _event):
+        if self.last_goal is None or self.separation_active:
+            return
+        self.publish_followers()
 
 
 if __name__ == "__main__":

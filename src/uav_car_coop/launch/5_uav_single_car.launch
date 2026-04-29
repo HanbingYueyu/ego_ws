@@ -1,6 +1,7 @@
 <launch>
   <arg name="vehicle" default="iris"/>
   <arg name="uav_sdf" default="$(env HOME)/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris/iris.sdf"/>
+  <arg name="world_name" default="$(find ros_gazebo_obstacle_car)/world/football_field.world"/>
   <arg name="world_frame" default="world"/>
   <arg name="uav_odom_topic" default="/mavros/local_position/odom"/>
   <arg name="uav_base_frame" default="uav_base_link"/>
@@ -30,6 +31,7 @@
   <include file="$(find px4)/launch/mavros_posix_sitl.launch">
     <arg name="vehicle" value="$(arg vehicle)"/>
     <arg name="sdf" value="$(arg uav_sdf)"/>
+    <arg name="world" value="$(arg world_name)"/>
     <arg name="x" value="$(arg field_start_x)"/>
     <arg name="y" value="0.0"/>
     <arg name="z" value="0.15"/>
@@ -112,6 +114,7 @@
     <param name="separation_gain" value="1.15"/>
     <param name="separation_max_bias" value="2.4"/>
     <param name="separation_publish_rate" value="3.0"/>
+    <param name="nominal_publish_rate" value="0.5"/>
     <param name="main_odom_topic" value="/world_odom"/>
     <param name="uav1_offset_x" value="0.0"/>
     <param name="uav1_offset_y" value="$(eval -2.0 * float(arg('formation_spacing')))"/>

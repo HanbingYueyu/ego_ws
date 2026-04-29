@@ -9,16 +9,16 @@
 
     <model name="football_ground">
       <static>true</static>
-      <pose>0 0 0 0 0 0</pose>
+      <pose>0 0 -0.025 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
-            <box><size>110 72 0.05</size></box>
+            <box><size>120 80 0.05</size></box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
-            <box><size>110 72 0.05</size></box>
+            <box><size>120 80 0.05</size></box>
           </geometry>
           <material>
             <script>
